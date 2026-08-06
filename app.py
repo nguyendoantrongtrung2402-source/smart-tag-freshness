@@ -2,6 +2,10 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 
+# Hàm làm sạch chuỗi HTML/CSS loại bỏ lùi đầu dòng thừa
+def _html(s: str) -> str:
+    return "\n".join(line.strip() for line in s.strip().split("\n"))
+
 # -----------------------------------------------------------------------------
 # 1. BẢNG DỮ LIỆU HIỆU CHUẨN MÀU HÓA HỌC (RGB vs pH)
 # -----------------------------------------------------------------------------
@@ -15,7 +19,7 @@ REF_DATA = [
 CALIBRATION_TARGET_RGB = np.array([200.0, 200.0, 200.0])
 
 # -----------------------------------------------------------------------------
-# 2. HÀM TÍNH TOÁN BACKEND (giữ nguyên logic đã kiểm chứng)
+# 2. HÀM TÍNH TOÁN BACKEND
 # -----------------------------------------------------------------------------
 def pH_to_freshness(ph, ph_fresh=6.0, ph_spoiled=8.5):
     if ph <= ph_fresh:
@@ -41,6 +45,7 @@ def extract_center_rgb_median(image: Image.Image, crop_ratio=0.3):
     return tuple(map(int, np.median(region, axis=(0, 1))))
 
 def extract_card_rgb_median(image: Image.Image, size_ratio=0.15):
+    """Cắt vùng góc trên-trái (15% chiều rộng/cao) chứa thẻ tham chiếu màu"""
     img_arr = np.array(image.convert("RGB"))
     h, w, _ = img_arr.shape
     region = img_arr[0:int(h*size_ratio), 0:int(w*size_ratio)]
@@ -53,22 +58,18 @@ def apply_color_calibration(measured_rgb, card_rgb):
     return tuple(map(int, calibrated))
 
 # -----------------------------------------------------------------------------
-# 3. VÒNG TRÒN TIẾN ĐỘ (SVG) — thay cho st.progress()
+# 3. VÒNG TRÒN TIẾN ĐỘ (SVG)
 # -----------------------------------------------------------------------------
 def render_progress_ring(percent, color_hex, size=132, stroke=10):
     radius = (size - stroke) / 2
     circumference = 2 * 3.14159265 * radius
     offset = circumference * (1 - percent / 100)
-    return f"""
-    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="transform: rotate(-90deg);">
-        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none"
-                stroke="rgba(255,255,255,0.08)" stroke-width="{stroke}" />
-        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none"
-                stroke="{color_hex}" stroke-width="{stroke}" stroke-linecap="round"
-                stroke-dasharray="{circumference}" stroke-dashoffset="{offset}"
-                style="transition: stroke-dashoffset 0.6s ease;" />
+    return _html(f"""
+    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="{stroke}" />
+        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none" stroke="{color_hex}" stroke-width="{stroke}" stroke-linecap="round" stroke-dasharray="{circumference}" stroke-dashoffset="{offset}" style="transition: stroke-dashoffset 0.6s ease;" />
     </svg>
-    """
+    """)
 
 # -----------------------------------------------------------------------------
 # 4. CẤU HÌNH TRANG & THIẾT KẾ MỚI
@@ -80,7 +81,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.markdown("""
+st.markdown(_html("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -147,7 +148,7 @@ st.markdown("""
         .glass-card { padding: 16px; }
     }
 </style>
-""", unsafe_allow_html=True)
+"""), unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # 5. HEADER
@@ -175,6 +176,8 @@ else:
         uploaded_image = Image.open(file_uploaded)
 
 use_calibration = st.checkbox("⚙️ Hiệu chỉnh màu tự động bằng thẻ tham chiếu")
+if use_calibration:
+    st.caption("📌 Lưu ý: Hãy đảm bảo thẻ màu chuẩn được đặt ở góc trên-trái khung hình khi chụp.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
@@ -200,39 +203,39 @@ if uploaded_image is not None:
 
     ring_svg = render_progress_ring(est_freshness, ring_color)
 
-    st.markdown(f"""
+    st.markdown(_html(f"""
     <div class="glass-card">
-        <div class="hero-flex">
-            <div>
-                <div class="hero-label">Chỉ số độ tươi</div>
-                <div><span class="hero-score">{est_freshness:g}</span><span class="hero-score-unit">%</span></div>
-                <div class="status-pill {pill_class}">{icon} {status_text}</div>
-            </div>
-            <div class="ring-wrap">
-                {ring_svg}
-                <div class="ring-icon">{icon}</div>
-            </div>
-        </div>
+    <div class="hero-flex">
+    <div>
+    <div class="hero-label">Chỉ số độ tươi</div>
+    <div><span class="hero-score">{est_freshness:g}</span><span class="hero-score-unit">%</span></div>
+    <div class="status-pill {pill_class}">{icon} {status_text}</div>
     </div>
-    """, unsafe_allow_html=True)
+    <div class="ring-wrap">
+    {ring_svg}
+    <div class="ring-icon">{icon}</div>
+    </div>
+    </div>
+    </div>
+    """), unsafe_allow_html=True)
 
-    st.markdown(f"""
+    st.markdown(_html(f"""
     <div class="glass-card">
-        <div class="hero-label" style="margin-bottom: 12px;">🔬 Chi tiết phân tích</div>
-        <div class="metric-grid">
-            <div class="metric-box">
-                <div class="label">pH dự đoán (IDW)</div>
-                <div class="value">{est_ph}</div>
-            </div>
-            <div class="metric-box">
-                <div class="label">Mã màu RGB</div>
-                <div class="value" style="font-size: 1rem;">
-                    <span class="swatch" style="background: rgb({r},{g},{b});"></span>{r}, {g}, {b}
-                </div>
-            </div>
-        </div>
+    <div class="hero-label" style="margin-bottom: 12px;">🔬 Chi tiết phân tích</div>
+    <div class="metric-grid">
+    <div class="metric-box">
+    <div class="label">pH dự đoán (IDW)</div>
+    <div class="value">{est_ph}</div>
     </div>
-    """, unsafe_allow_html=True)
+    <div class="metric-box">
+    <div class="label">Mã màu RGB</div>
+    <div class="value" style="font-size: 1rem;">
+    <span class="swatch" style="background: rgb({r},{g},{b});"></span>{r}, {g}, {b}
+    </div>
+    </div>
+    </div>
+    </div>
+    """), unsafe_allow_html=True)
 
     with st.expander("Xem ảnh gốc đã chụp"):
         st.image(uploaded_image, use_container_width=True)
