@@ -150,40 +150,67 @@ div[role="radiogroup"] [data-testid="stMarkdownContainer"]{
   color:#fff!important;opacity:1!important;font-weight:750!important;
 }
 
-div[data-testid="stCameraInput"],div[data-testid="stFileUploader"]{
+div[data-testid="stFileUploader"]{
   overflow:hidden;padding:8px;border-radius:26px;background:rgba(255,255,255,.065);
   border:1px solid rgba(255,255,255,.11);
   box-shadow:0 28px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045);
   backdrop-filter:blur(18px);
 }
-div[data-testid="stCameraInput"] video{max-height:420px!important;object-fit:cover!important;border-radius:20px!important;background:#030204!important;}
 
-div[data-testid="stCameraInput"] button{
-  min-height:48px!important;border-radius:15px!important;
-  border:1px solid rgba(235,159,242,.55)!important;
-  background:linear-gradient(135deg,#934aaf,#bd4f96)!important;
-  color:#fff!important;font-weight:900!important;opacity:1!important;
-  box-shadow:0 9px 28px rgba(148,53,164,.26)!important;
+div[data-testid="stFileUploader"]{
+  max-width:560px;
+  margin:0 auto;
 }
-div[data-testid="stCameraInput"] button:hover{
-  filter:brightness(1.12)!important;transform:translateY(-1px);
+div[data-testid="stFileUploader"] section{
+  min-height:118px!important;
+  border:1px dashed rgba(224,154,235,.30)!important;
+  border-radius:20px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.018))!important;
 }
-div[data-testid="stCameraInput"] button *,
-div[data-testid="stCameraInput"] button svg{color:#fff!important;fill:#fff!important;opacity:1!important;}
-
-div[data-testid="stCameraInput"] [data-testid="baseButton-secondary"]{
-  background:linear-gradient(135deg,#6c1d31,#8f273e)!important;
-  border:1px solid rgba(255,107,128,.68)!important;
-  color:#ffe4e8!important;
-}
-div[data-testid="stCameraInput"] [data-testid="baseButton-secondary"] *{color:#ffe4e8!important;fill:#ffe4e8!important;}
-
 div[data-testid="stFileUploader"] button{
-  border-radius:14px!important;border:1px solid rgba(226,145,235,.48)!important;
-  background:linear-gradient(135deg,#80409a,#a4478d)!important;
-  color:#fff!important;font-weight:850!important;opacity:1!important;
+  min-height:50px!important;
+  min-width:170px!important;
+  border-radius:16px!important;
+  border:1px solid rgba(226,145,235,.55)!important;
+  background:linear-gradient(135deg,#85449d,#ad4d92)!important;
+  color:#fff!important;
+  font-weight:900!important;
+  opacity:1!important;
+  box-shadow:0 12px 30px rgba(132,57,148,.24)!important;
+  transition:filter .18s ease,transform .18s ease,box-shadow .18s ease!important;
 }
-div[data-testid="stFileUploader"] button *{color:#fff!important;fill:#fff!important;}
+div[data-testid="stFileUploader"] button:hover{
+  filter:brightness(1.12)!important;
+  transform:translateY(-1px)!important;
+  box-shadow:0 15px 34px rgba(157,67,166,.31)!important;
+}
+div[data-testid="stFileUploader"] button *,
+div[data-testid="stFileUploader"] button svg{
+  color:#fff!important;
+  fill:#fff!important;
+  opacity:1!important;
+}
+.mobile-capture-note{
+  max-width:560px;
+  margin:8px auto 0;
+  text-align:center;
+  color:#978a9b;
+  font-size:.76rem;
+  line-height:1.45;
+}
+@media(max-width:640px){
+  div[data-testid="stFileUploader"] section{
+    min-height:92px!important;
+    padding:12px!important;
+  }
+  div[data-testid="stFileUploader"] section > div{
+    gap:8px!important;
+  }
+  div[data-testid="stFileUploader"] button{
+    width:100%!important;
+    min-height:52px!important;
+  }
+}
 
 .result-shell{position:relative;margin-top:18px;padding:1px;border-radius:29px;overflow:hidden;animation:resultIn .36s cubic-bezier(.2,.8,.2,1);}
 @keyframes resultIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:translateY(0) scale(1)}}
@@ -321,16 +348,84 @@ st.markdown(_html(f"""
 
 <div class="action-head">
   <div class="action-title">Quét thẻ</div>
-  <div class="action-sub">Chụp ảnh hoặc chọn ảnh có sẵn</div>
+  <div class="action-sub">Một ảnh thẻ là đủ để bắt đầu</div>
 </div>
 """), unsafe_allow_html=True)
 
-mode = st.radio("Nguồn ảnh", ["📷 Chụp ảnh", "▣ Thư viện"], horizontal=True, label_visibility="collapsed")
+mode = st.radio(
+    "Nguồn ảnh",
+    ["📷 Chụp thẻ", "▣ Thư viện"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
 
-if mode == "📷 Chụp ảnh":
-    image_file = st.camera_input("Chụp ảnh", label_visibility="collapsed")
+# NOTE 11 — MOBILE CAPTURE
+# Không dùng st.camera_input() vì trên một số điện thoại luồng webcam/video
+# khiến người dùng phải pause rồi chọn frame. Thay vào đó dùng file input ảnh
+# của trình duyệt. Trên điện thoại, trình duyệt thường cho phép chọn Camera
+# để chụp ảnh tĩnh trực tiếp; trên desktop nó hoạt động như file picker.
+#
+# Đây là giải pháp không phụ thuộc component ngoài và giữ deploy Streamlit đơn giản.
+# Nếu sau này cần ép mở camera sau chỉ bằng 1 lần chạm trên mọi trình duyệt,
+# nên chuyển phần capture sang custom component HTML có:
+# <input type="file" accept="image/*" capture="environment">
+
+if mode == "📷 Chụp thẻ":
+    st.markdown(
+        _html("""
+        <div class="mobile-capture-note">
+          Trên điện thoại, chọn <b>Camera</b> khi bảng chọn ảnh mở ra để chụp thẻ trực tiếp.
+        </div>
+        """),
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        _html("""
+        <style>
+        div[data-testid="stFileUploader"] button{
+          font-size:0!important;
+        }
+        div[data-testid="stFileUploader"] button::after{
+          content:"MỞ CAMERA";
+          font-size:.88rem;
+          letter-spacing:.035em;
+          color:#fff;
+        }
+        </style>
+        """),
+        unsafe_allow_html=True,
+    )
+    image_file = st.file_uploader(
+        "Chụp thẻ",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+        key="capture_photo",
+    )
 else:
-    image_file = st.file_uploader("Chọn ảnh", type=["jpg","jpeg","png"], label_visibility="collapsed")
+    st.markdown(
+        _html("""
+        <style>
+        div[data-testid="stFileUploader"] button{
+          font-size:0!important;
+        }
+        div[data-testid="stFileUploader"] button::after{
+          content:"CHỌN ẢNH";
+          font-size:.88rem;
+          letter-spacing:.035em;
+          color:#fff;
+        }
+        </style>
+        """),
+        unsafe_allow_html=True,
+    )
+    image_file = st.file_uploader(
+        "Chọn ảnh",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+        key="library_photo",
+    )
 
 if image_file is not None:
     try:
