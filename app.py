@@ -25,41 +25,43 @@ def _html(s: str) -> str:
 PERILLA_CLUSTER_SVG = r"""
 <svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M188 151 C167 130 147 112 126 99 L111 90 L119 82 L100 78 L109 69 L88 62 L102 53 L84 44 L105 41 L96 28 L119 31 L116 17 L140 27 L145 11 L164 29 L173 18 L181 41 C190 72 196 110 188 151 Z" stroke-width="5"/>
-    <path d="M181 41 C164 55 151 70 139 88 C128 104 117 120 106 139" stroke-width="3"/>
-    <path d="M173 55 L151 50 M166 66 L141 64 M157 79 L131 78 M148 92 L122 93 M139 106 L115 110" stroke-width="2.5"/>
-    <path d="M159 61 L171 84 M148 72 L161 96 M137 86 L150 111 M126 99 L138 124" stroke-width="2.4"/>
+    <path d="M180 160 C215 140 246 113 278 78" stroke-width="6"/>
 
-    <path d="M181 151 C155 160 133 174 115 192 L102 205 L88 201 L89 216 L71 216 L76 230 L57 235 L68 246 L49 256 L65 264 L49 279 L72 277 L67 292 L91 283 L94 297 L116 282 L124 293 L143 271 C167 239 181 201 181 151 Z" stroke-width="5"/>
-    <path d="M181 151 C154 180 132 208 111 237 C98 255 87 270 73 284" stroke-width="3"/>
-    <path d="M165 176 L140 173 M154 191 L128 189 M143 207 L116 206 M132 223 L106 224 M121 240 L95 244 M109 256 L86 262" stroke-width="2.5"/>
-    <path d="M151 182 L163 204 M139 198 L151 220 M126 215 L138 237 M114 232 L125 252 M101 249 L111 267" stroke-width="2.4"/>
+    <path d="M178 154 C154 135 133 117 113 98 L101 88 L111 82 L94 74 L106 67 L88 56 L104 50 L91 38 L111 37 L105 24 L128 29 L129 15 L148 28 L158 18 L168 37 C181 68 188 108 178 154 Z" stroke-width="5"/>
+    <path d="M178 154 C166 125 158 96 154 67 C152 51 151 38 148 28" stroke-width="3.2"/>
+    <path d="M165 120 L141 104 M161 103 L136 88 M158 86 L134 72 M156 70 L136 55" stroke-width="2.2"/>
+    <path d="M166 119 L181 98 M161 101 L177 81 M157 83 L172 65 M154 66 L166 51" stroke-width="2.2"/>
 
-    <path d="M188 151 C217 142 244 141 267 150 L282 157 L291 148 L298 163 L313 159 L311 175 L327 179 L318 191 L332 201 L319 211 L328 226 L310 229 L312 245 L293 242 L290 258 L271 249 L263 263 L246 247 L235 258 L222 235 C206 208 195 181 188 151 Z" stroke-width="5"/>
-    <path d="M188 151 C216 168 238 187 258 208 C274 225 287 241 300 254" stroke-width="3"/>
-    <path d="M208 161 L230 153 M219 172 L244 164 M231 183 L257 175 M243 195 L270 187 M255 207 L281 200 M267 220 L291 215" stroke-width="2.5"/>
-    <path d="M218 166 L207 190 M231 177 L220 201 M244 189 L233 213 M257 202 L246 225 M270 214 L259 237" stroke-width="2.4"/>
+    <path d="M176 159 C151 168 129 182 111 200 L100 211 L86 208 L88 222 L70 223 L76 236 L58 242 L70 252 L53 263 L70 270 L56 285 L78 282 L75 296 L97 286 L102 299 L121 282 L130 292 L146 268 C166 237 178 198 176 159 Z" stroke-width="5"/>
+    <path d="M176 159 C153 187 133 213 117 238 C104 258 94 275 78 291" stroke-width="3.2"/>
+    <path d="M157 185 L132 183 M147 199 L120 198 M137 214 L109 214 M126 230 L100 233 M116 246 L91 252" stroke-width="2.2"/>
+    <path d="M151 187 L164 209 M139 202 L152 224 M127 217 L140 239 M115 233 L127 254 M104 249 L114 268" stroke-width="2.2"/>
 
-    <path d="M188 151 C214 133 239 111 261 88 C278 69 293 51 308 34" stroke-width="7"/>
+    <path d="M184 156 C214 145 242 145 267 154 L281 160 L290 151 L298 166 L313 162 L312 178 L329 181 L320 194 L334 203 L321 214 L331 229 L313 232 L316 248 L297 245 L294 261 L274 251 L266 265 L248 249 L237 260 L223 237 C207 211 195 183 184 156 Z" stroke-width="5"/>
+    <path d="M184 156 C213 172 237 190 258 211 C275 228 289 244 304 258" stroke-width="3.2"/>
+    <path d="M209 165 L230 156 M221 176 L245 167 M233 187 L259 178 M246 199 L272 190 M258 211 L284 204" stroke-width="2.2"/>
+    <path d="M214 168 L204 191 M227 179 L216 202 M240 190 L229 214 M253 202 L242 225 M266 215 L255 237" stroke-width="2.2"/>
   </g>
 </svg>
 """
 
 PERILLA_LOGO_SVG = r"""
 <svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <g stroke="#2a0f2e" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M188 151 C167 130 147 112 126 99 L111 90 L119 82 L100 78 L109 69 L88 62 L102 53 L84 44 L105 41 L96 28 L119 31 L116 17 L140 27 L145 11 L164 29 L173 18 L181 41 C190 72 196 110 188 151 Z" fill="#a251ae" stroke-width="4"/>
-    <path d="M181 151 C155 160 133 174 115 192 L102 205 L88 201 L89 216 L71 216 L76 230 L57 235 L68 246 L49 256 L65 264 L49 279 L72 277 L67 292 L91 283 L94 297 L116 282 L124 293 L143 271 C167 239 181 201 181 151 Z" fill="#8f439c" stroke-width="4"/>
-    <path d="M188 151 C217 142 244 141 267 150 L282 157 L291 148 L298 163 L313 159 L311 175 L327 179 L318 191 L332 201 L319 211 L328 226 L310 229 L312 245 L293 242 L290 258 L271 249 L263 263 L246 247 L235 258 L222 235 C206 208 195 181 188 151 Z" fill="#aa54b5" stroke-width="4"/>
-    <g fill="none" stroke="#421943">
-      <path d="M181 41 C164 55 151 70 139 88 C128 104 117 120 106 139" stroke-width="3"/>
-      <path d="M181 151 C154 180 132 208 111 237 C98 255 87 270 73 284" stroke-width="3"/>
-      <path d="M188 151 C216 168 238 187 258 208 C274 225 287 241 300 254" stroke-width="3"/>
-      <path d="M159 61 L171 84 M148 72 L161 96 M137 86 L150 111 M126 99 L138 124" stroke-width="2"/>
-      <path d="M151 182 L163 204 M139 198 L151 220 M126 215 L138 237 M114 232 L125 252" stroke-width="2"/>
-      <path d="M218 166 L207 190 M231 177 L220 201 M244 189 L233 213 M257 202 L246 225" stroke-width="2"/>
+  <g stroke="#35123b" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M180 160 C215 140 246 113 278 78" fill="none" stroke="#4d1e4e" stroke-width="7"/>
+
+    <path d="M178 154 C154 135 133 117 113 98 L101 88 L111 82 L94 74 L106 67 L88 56 L104 50 L91 38 L111 37 L105 24 L128 29 L129 15 L148 28 L158 18 L168 37 C181 68 188 108 178 154 Z" fill="#9d4ca9" stroke-width="4"/>
+    <path d="M176 159 C151 168 129 182 111 200 L100 211 L86 208 L88 222 L70 223 L76 236 L58 242 L70 252 L53 263 L70 270 L56 285 L78 282 L75 296 L97 286 L102 299 L121 282 L130 292 L146 268 C166 237 178 198 176 159 Z" fill="#853a92" stroke-width="4"/>
+    <path d="M184 156 C214 145 242 145 267 154 L281 160 L290 151 L298 166 L313 162 L312 178 L329 181 L320 194 L334 203 L321 214 L331 229 L313 232 L316 248 L297 245 L294 261 L274 251 L266 265 L248 249 L237 260 L223 237 C207 211 195 183 184 156 Z" fill="#a84fb2" stroke-width="4"/>
+
+    <g fill="none" stroke="#4b1a4f">
+      <path d="M178 154 C166 125 158 96 154 67 C152 51 151 38 148 28" stroke-width="3"/>
+      <path d="M176 159 C153 187 133 213 117 238 C104 258 94 275 78 291" stroke-width="3"/>
+      <path d="M184 156 C213 172 237 190 258 211 C275 228 289 244 304 258" stroke-width="3"/>
+      <path d="M165 120 L141 104 M161 103 L136 88 M158 86 L134 72 M156 70 L136 55 M166 119 L181 98 M161 101 L177 81 M157 83 L172 65" stroke-width="2"/>
+      <path d="M157 185 L132 183 M147 199 L120 198 M137 214 L109 214 M126 230 L100 233 M151 187 L164 209 M139 202 L152 224 M127 217 L140 239" stroke-width="2"/>
+      <path d="M209 165 L230 156 M221 176 L245 167 M233 187 L259 178 M246 199 L272 190 M214 168 L204 191 M227 179 L216 202 M240 190 L229 214" stroke-width="2"/>
     </g>
-    <path d="M188 151 C214 133 239 111 261 88 C278 69 293 51 308 34" fill="none" stroke="#4b1d43" stroke-width="7"/>
   </g>
 </svg>
 """
@@ -101,6 +103,23 @@ body{background:#08060b;}
   backdrop-filter:blur(18px);
 }
 .hero:after{content:"";position:absolute;width:280px;height:280px;right:-110px;top:-145px;border-radius:50%;background:radial-gradient(circle,rgba(202,98,192,.17),transparent 66%);}
+.hero:before{
+  content:"";
+  position:absolute;
+  width:420px;
+  height:420px;
+  left:-160px;
+  bottom:-250px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(187,71,168,.14),rgba(187,71,168,0) 68%);
+  filter:blur(8px);
+  animation:heroGlow 9s ease-in-out infinite alternate;
+}
+@keyframes heroGlow{
+  from{transform:translate3d(0,0,0) scale(1);opacity:.55;}
+  to{transform:translate3d(70px,-28px,0) scale(1.08);opacity:1;}
+}
+
 .brand-row{position:relative;z-index:1;display:flex;align-items:center;gap:14px;}
 .brand-mark{
   width:70px;height:70px;display:grid;place-items:center;border-radius:20px;padding:7px;
@@ -111,10 +130,10 @@ body{background:#08060b;}
 .brand-mark svg{width:100%;height:100%;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18));}
 .brand-name{font-size:1.88rem;font-weight:920;letter-spacing:-.055em;line-height:1;}
 .brand-mini{margin-top:6px;font-size:.70rem;font-weight:750;letter-spacing:.18em;color:rgba(255,255,255,.53);text-transform:uppercase;}
-.hero-copy{position:relative;z-index:1;margin-top:28px;max-width:550px;}
-.hero-kicker{display:inline-flex;padding:6px 10px;border-radius:999px;margin-bottom:12px;font-size:.66rem;font-weight:850;letter-spacing:.12em;color:#dfcde5;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);text-transform:uppercase;}
-.hero-title{margin:0;max-width:550px;font-size:2.18rem;line-height:1.04;font-weight:930;letter-spacing:-.058em;}
-.hero-sub{max-width:470px;margin-top:12px;font-size:.93rem;line-height:1.57;color:rgba(255,255,255,.63);}
+.hero-copy{position:relative;z-index:1;margin-top:34px;max-width:590px;}
+.hero-kicker{display:none;}
+.hero-title{margin:0;max-width:590px;font-size:2.42rem;line-height:.98;font-weight:940;letter-spacing:-.065em;text-wrap:balance;}
+.hero-sub{max-width:470px;margin-top:16px;font-size:.92rem;line-height:1.5;color:rgba(255,255,255,.62);letter-spacing:.01em;}
 
 .action-head{text-align:center;margin:18px 0 12px;}
 .action-title{font-size:1.12rem;font-weight:850;letter-spacing:-.025em;}
@@ -195,7 +214,7 @@ div[data-testid="stFileUploader"] button *{color:#fff!important;fill:#fff!import
   .block-container{padding-top:.62rem;padding-left:.85rem;padding-right:.85rem;}
   .hero{padding:22px 20px 22px;border-radius:25px;}
   .brand-mark{width:62px;height:62px;border-radius:18px;}
-  .brand-name{font-size:1.62rem}.hero-title{font-size:1.73rem}.hero-sub{font-size:.88rem}
+  .brand-name{font-size:1.62rem}.hero-title{font-size:1.9rem}.hero-sub{font-size:.88rem}
   .perilla-bg{width:290px;opacity:.043}.perilla-bg.left{left:-110px;top:180px}.perilla-bg.right{right:-115px;bottom:55px}
   .result-card{padding:27px 17px 24px}.status-title{font-size:1.4rem}
   div[role="radiogroup"]{width:100%}
@@ -290,18 +309,19 @@ st.markdown(_html(f"""
     <div class="brand-mark">{PERILLA_LOGO_SVG}</div>
     <div>
       <div class="brand-name">FreshTag</div>
-      <div class="brand-mini">Freshness indicator</div>
+      <div class="brand-mini">PERILLA COLOR INTELLIGENCE</div>
     </div>
   </div>
+
   <div class="hero-copy">
-    <div class="hero-kicker">THẺ CHỈ THỊ TÍA TÔ</div>
-    <div class="hero-title">Chụp một lần.<br>Biết trạng thái ngay.</div>
-    <div class="hero-sub">Kiểm tra nhanh trạng thái thực phẩm bằng màu của thẻ chỉ thị.</div>
+    <div class="hero-title">MÀU THAY ĐỔI.<br>TƯƠI HAY THỐI?</div>
+    <div class="hero-sub">Chụp thẻ. FreshTag đọc màu.</div>
   </div>
 </div>
+
 <div class="action-head">
-  <div class="action-title">Kiểm tra ngay</div>
-  <div class="action-sub">Chụp thẻ chỉ thị hoặc chọn ảnh có sẵn</div>
+  <div class="action-title">Quét thẻ</div>
+  <div class="action-sub">Chụp ảnh hoặc chọn ảnh có sẵn</div>
 </div>
 """), unsafe_allow_html=True)
 
