@@ -4,55 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:transparent;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-  .shell{
-    position:relative;width:100%;height:min(72vh,620px);min-height:390px;
-    overflow:hidden;border-radius:26px;background:#050306;
-    border:1px solid rgba(255,255,255,.12);
-    box-shadow:0 26px 70px rgba(0,0,0,.34);
-  }
-  video{width:100%;height:100%;object-fit:cover;background:#030204;display:block}
-  .shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(5,3,7,.22),transparent 24%,transparent 70%,rgba(5,3,7,.48))}
-  .guide{
-    position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);
-    width:min(64vw,300px);aspect-ratio:1.4/1;border:2px solid rgba(255,255,255,.72);
-    border-radius:18px;box-shadow:0 0 0 999px rgba(11,4,14,.10);
-    pointer-events:none;
-  }
-  .guide:before,.guide:after{
-    content:"";position:absolute;width:28px;height:28px;border-color:#d28ada;border-style:solid
-  }
-  .guide:before{left:-2px;top:-2px;border-width:4px 0 0 4px;border-radius:15px 0 0 0}
-  .guide:after{right:-2px;bottom:-2px;border-width:0 4px 4px 0;border-radius:0 0 15px 0}
-  .guide-label{
-    position:absolute;left:50%;top:calc(48% - min(23vw,105px));transform:translate(-50%,-100%);
-    padding:7px 11px;border-radius:999px;background:rgba(17,8,20,.55);backdrop-filter:blur(12px);
-    font-size:12px;font-weight:750;letter-spacing:.02em;white-space:nowrap;color:rgba(255,255,255,.86)
-  }
-  .controls{
-    position:absolute;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));
-    display:flex;align-items:center;justify-content:center;z-index:4
-  }
-  .shutter{
-    width:76px;height:76px;border-radius:50%;border:3px solid rgba(255,255,255,.96);
-    background:rgba(255,255,255,.13);padding:6px;cursor:pointer;
-    box-shadow:0 8px 28px rgba(0,0,0,.38);transition:transform .12s ease
-  }
-  .shutter:active{transform:scale(.94)}
-  .shutter span{display:block;width:100%;height:100%;border-radius:50%;background:#fff}
-  .status{
-    position:absolute;left:14px;right:14px;top:14px;z-index:5;
-    padding:11px 13px;border-radius:15px;background:rgba(20,8,24,.70);
-    border:1px solid rgba(255,255,255,.11);backdrop-filter:blur(14px);
-    font-size:13px;line-height:1.4;text-align:center
-  }
-  .error .shutter{display:none}
-  canvas{display:none}
-  @media(max-width:520px){
-    .shell{height:62vh;min-height:420px;border-radius:22px}
-    .guide{width:72vw}
-  }
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:transparent;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.shell{position:relative;width:100%;height:560px;min-height:420px;overflow:hidden;border-radius:26px;background:#050306;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 70px rgba(0,0,0,.34)}
+video{width:100%;height:100%;object-fit:cover;background:#050306;display:block;transform:translateZ(0)}
+.shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(5,3,7,.20),transparent 24%,transparent 70%,rgba(5,3,7,.50))}
+.guide{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:min(72%,320px);aspect-ratio:1.4/1;border:2px solid rgba(255,255,255,.74);border-radius:18px;box-shadow:0 0 0 999px rgba(11,4,14,.10);pointer-events:none}
+.guide:before,.guide:after{content:"";position:absolute;width:28px;height:28px;border-color:#d28ada;border-style:solid}
+.guide:before{left:-2px;top:-2px;border-width:4px 0 0 4px;border-radius:15px 0 0 0}
+.guide:after{right:-2px;bottom:-2px;border-width:0 4px 4px 0;border-radius:0 0 15px 0}
+.guide-label{position:absolute;left:50%;top:18px;transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:rgba(17,8,20,.62);backdrop-filter:blur(12px);font-size:12px;font-weight:760;letter-spacing:.02em;white-space:nowrap;color:rgba(255,255,255,.90);z-index:4}
+.controls{position:absolute;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center;z-index:5}
+.shutter{width:76px;height:76px;border-radius:50%;border:3px solid rgba(255,255,255,.96);background:rgba(255,255,255,.13);padding:6px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.38);transition:transform .12s ease,opacity .15s ease}
+.shutter:active{transform:scale(.94)}
+.shutter:disabled{opacity:.45;cursor:default}
+.shutter span{display:block;width:100%;height:100%;border-radius:50%;background:#fff}
+.status{position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);z-index:6;padding:14px 16px;border-radius:16px;background:rgba(20,8,24,.78);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(14px);font-size:13px;line-height:1.45;text-align:center}
+.status.small{top:auto;bottom:108px;transform:none;left:50%;right:auto;max-width:86%;translate:-50% 0;white-space:nowrap;padding:8px 12px;border-radius:999px;font-size:12px}
+.retry{display:none;position:absolute;left:50%;top:58%;transform:translateX(-50%);z-index:7;border:1px solid rgba(226,145,235,.62);background:linear-gradient(135deg,#85449d,#ad4d92);color:#fff;font-weight:850;border-radius:14px;padding:12px 18px;cursor:pointer}
+.error .retry{display:block}
+.error .shutter{display:none}
+canvas{display:none}
+@media(max-width:520px){.shell{height:64vh;min-height:430px;border-radius:22px}.guide{width:76%}}
 </style>
 </head>
 <body>
@@ -62,114 +35,174 @@
   <div class="shade"></div>
   <div class="guide"></div>
   <div class="guide-label">Đặt thẻ vào trong khung</div>
-  <div class="status" id="status">Đang yêu cầu quyền truy cập camera…</div>
-  <div class="controls">
-    <button class="shutter" id="shutter" aria-label="Chụp ảnh"><span></span></button>
-  </div>
+  <div class="status" id="status">Đang khởi động camera…</div>
+  <button class="retry" id="retry">THỬ LẠI CAMERA</button>
+  <div class="controls"><button class="shutter" id="shutter" aria-label="Chụp ảnh" disabled><span></span></button></div>
 </div>
 
 <script>
-(function(){
-  const STREAMLIT = "streamlit:";
-  let stream = null;
-  let started = false;
+(() => {
+  const SET_COMPONENT_VALUE = "streamlit:setComponentValue";
+  const RENDER = "streamlit:render";
+  const COMPONENT_READY = "streamlit:componentReady";
+  const SET_FRAME_HEIGHT = "streamlit:setFrameHeight";
+
+  const shell = document.getElementById("shell");
   const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
   const status = document.getElementById("status");
-  const shell = document.getElementById("shell");
   const shutter = document.getElementById("shutter");
+  const retry = document.getElementById("retry");
 
-  function post(type, payload={}){
-    window.parent.postMessage(Object.assign({
-      isStreamlitMessage:true,
-      type:STREAMLIT + type
-    }, payload), "*");
+  let stream = null;
+  let starting = false;
+  let started = false;
+
+  function sendMessage(type, data = {}) {
+    window.parent.postMessage(Object.assign({isStreamlitMessage:true,type:type}, data), "*");
   }
-
-  function setHeight(){
-    post("setFrameHeight", {height: document.documentElement.scrollHeight});
+  function setFrameHeight() {
+    const h = Math.max(430, document.documentElement.scrollHeight || 560);
+    sendMessage(SET_FRAME_HEIGHT, {height:h});
   }
-
-  function setValue(value){
-    post("setComponentValue", {value:value, dataType:"json"});
+  function setComponentValue(value) {
+    sendMessage(SET_COMPONENT_VALUE, {value:value,dataType:"json"});
   }
-
-  function friendlyError(err){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-      return "Trình duyệt này không hỗ trợ camera trực tiếp.";
-    if (err && err.name === "NotAllowedError")
-      return "Bạn chưa cho phép truy cập camera. Hãy bật quyền Camera cho trang này rồi tải lại.";
-    if (err && err.name === "NotFoundError")
-      return "Không tìm thấy camera trên thiết bị.";
-    if (err && err.name === "NotReadableError")
-      return "Camera đang được ứng dụng khác sử dụng.";
-    return "Không thể mở camera. Hãy kiểm tra quyền Camera của trình duyệt.";
+  function setStatus(message, mode="center") {
+    status.textContent = message;
+    status.style.display = "block";
+    status.classList.toggle("small", mode === "small");
   }
+  function hideStatus() {
+    status.style.display = "none";
+    status.classList.remove("small");
+  }
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+    started = false;
+    starting = false;
+  }
+  function errorMessage(err) {
+    if (!window.isSecureContext) return "Camera cần kết nối HTTPS.";
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return "Trình duyệt này không hỗ trợ camera trực tiếp.";
+    if (!err) return "Không thể mở camera.";
+    if (err.name === "NotAllowedError" || err.name === "SecurityError") return "Camera đang bị chặn. Hãy cho phép quyền Camera cho trang này rồi thử lại.";
+    if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") return "Không tìm thấy camera trên thiết bị.";
+    if (err.name === "NotReadableError" || err.name === "TrackStartError") return "Camera đang được ứng dụng khác sử dụng.";
+    return "Không thể mở camera: " + (err.message || err.name || "lỗi không xác định");
+  }
+  async function attachStream(mediaStream) {
+    stream = mediaStream;
+    video.srcObject = stream;
 
-  async function startCamera(){
-    if(started) return;
-    started = true;
-    try{
-      status.textContent = "Đang mở camera…";
-      const constraints = {
-        audio:false,
-        video:{
-          facingMode:{ideal:"environment"},
-          width:{ideal:1920},
-          height:{ideal:1080}
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Camera không trả về hình ảnh.")), 8000);
+      function ready() {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          clearTimeout(timer);
+          video.removeEventListener("loadedmetadata", ready);
+          video.removeEventListener("canplay", ready);
+          resolve();
         }
-      };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      await video.play();
-      status.style.display = "none";
-      setHeight();
-    }catch(err){
+      }
+      video.addEventListener("loadedmetadata", ready);
+      video.addEventListener("canplay", ready);
+      ready();
+    });
+
+    try { await video.play(); } catch (_) {}
+    await new Promise(r => setTimeout(r, 300));
+
+    if (!video.videoWidth || !video.videoHeight) throw new Error("Camera đã mở nhưng chưa có khung hình.");
+
+    started = true;
+    starting = false;
+    shell.classList.remove("error");
+    shutter.disabled = false;
+    hideStatus();
+    setFrameHeight();
+  }
+  async function getPreferredCamera() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}
+      });
+    } catch (firstErr) {
+      if (firstErr && (firstErr.name === "NotAllowedError" || firstErr.name === "SecurityError")) throw firstErr;
+      return await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+    }
+  }
+  async function startCamera(force=false) {
+    if (starting || (started && !force)) return;
+
+    stopCamera();
+    starting = true;
+    shutter.disabled = true;
+    shell.classList.remove("error");
+
+    if (!window.isSecureContext) {
+      starting = false;
       shell.classList.add("error");
-      status.textContent = friendlyError(err);
-      status.style.display = "block";
-      setHeight();
+      setStatus("Camera cần HTTPS để hoạt động.");
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      starting = false;
+      shell.classList.add("error");
+      setStatus("Trình duyệt này không hỗ trợ camera trực tiếp.");
+      return;
+    }
+
+    try {
+      setStatus("Đang yêu cầu quyền camera…");
+      const mediaStream = await getPreferredCamera();
+      setStatus("Đang nhận hình ảnh từ camera…","small");
+      await attachStream(mediaStream);
+    } catch (err) {
+      stopCamera();
+      shell.classList.add("error");
+      setStatus(errorMessage(err));
+      setFrameHeight();
+      console.error("FreshTag camera error:", err);
     }
   }
 
-  function stopCamera(){
-    if(stream){
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-  }
-
-  shutter.addEventListener("click", function(){
-    if(!video.videoWidth || !video.videoHeight) return;
+  shutter.addEventListener("click", () => {
+    if (!started || !video.videoWidth || !video.videoHeight) return;
     shutter.disabled = true;
 
-    const maxW = 1600;
-    const scale = Math.min(1, maxW / video.videoWidth);
+    const maxWidth = 1600;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d",{alpha:false});
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-    const jpg = canvas.toDataURL("image/jpeg", 0.90);
-    status.textContent = "Đã chụp · Đang phân tích…";
-    status.style.display = "block";
+    const image = canvas.toDataURL("image/jpeg",0.90);
+    setStatus("Đã chụp · FreshTag đang phân tích…","small");
     stopCamera();
-    setValue(jpg);
+    setComponentValue(image);
   });
 
-  window.addEventListener("message", function(event){
-    if(!event.data || !event.data.isStreamlitMessage) return;
-    if(event.data.type === STREAMLIT + "render"){
-      startCamera();
-      setHeight();
-    }
-  });
-
+  retry.addEventListener("click", () => startCamera(true));
   window.addEventListener("beforeunload", stopCamera);
 
-  post("componentReady", {apiVersion:1});
-  setHeight();
+  window.addEventListener("message", event => {
+    if (!event.data || event.data.type !== RENDER) return;
+    startCamera(false);
+    setFrameHeight();
+  });
+
+  sendMessage(COMPONENT_READY,{apiVersion:1});
+  setFrameHeight();
+
+  // Fallback nếu trình duyệt/Streamlit chậm gửi render event.
+  setTimeout(() => startCamera(false), 700);
 })();
 </script>
 </body>
