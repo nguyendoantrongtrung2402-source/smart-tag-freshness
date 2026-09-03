@@ -12,7 +12,7 @@ INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
 
 CAMERA_COMPONENT_DIR = Path(__file__).parent / "freshtag_camera"
 camera_component = components.declare_component(
-    "freshtag_native_camera",
+    "freshtag_native_camera_v8",
     path=str(CAMERA_COMPONENT_DIR),
 )
 
@@ -423,15 +423,6 @@ image = None
 
 if mode == "📷 Chụp thẻ":
     if "camera_capture" not in st.session_state:
-        st.markdown(
-            _html("""
-            <div class="native-camera-hint">
-              Cho phép quyền camera khi trình duyệt hỏi. FreshTag ưu tiên camera sau của điện thoại.
-            </div>
-            """),
-            unsafe_allow_html=True,
-        )
-
         captured_data = capture_camera(key="freshtag_live_camera")
 
         if captured_data:
