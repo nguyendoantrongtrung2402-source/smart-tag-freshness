@@ -8,6 +8,8 @@
 html,body{margin:0;padding:0;background:transparent;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .shell{position:relative;width:100%;height:560px;min-height:420px;overflow:hidden;border-radius:26px;background:#050306;border:1px solid rgba(255,255,255,.12);box-shadow:0 26px 70px rgba(0,0,0,.34)}
 video{width:100%;height:100%;object-fit:cover;background:#050306;display:block;transform:translateZ(0)}
+video::-webkit-media-controls{display:none!important}
+video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
 .shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(5,3,7,.20),transparent 24%,transparent 70%,rgba(5,3,7,.50))}
 .guide{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:min(72%,320px);aspect-ratio:1.4/1;border:2px solid rgba(255,255,255,.74);border-radius:18px;box-shadow:0 0 0 999px rgba(11,4,14,.10);pointer-events:none}
 .guide:before,.guide:after{content:"";position:absolute;width:28px;height:28px;border-color:#d28ada;border-style:solid}
@@ -24,13 +26,32 @@ video{width:100%;height:100%;object-fit:cover;background:#050306;display:block;t
 .retry{display:none;position:absolute;left:50%;top:58%;transform:translateX(-50%);z-index:7;border:1px solid rgba(226,145,235,.62);background:linear-gradient(135deg,#85449d,#ad4d92);color:#fff;font-weight:850;border-radius:14px;padding:12px 18px;cursor:pointer}
 .error .retry{display:block}
 .error .shutter{display:none}
+
+.browser-gate{display:none;position:absolute;inset:0;z-index:20;padding:26px;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 18%,rgba(145,70,165,.18),transparent 34%),linear-gradient(155deg,#100913,#070509)}
+.browser-gate.show{display:flex}
+.browser-card{width:min(92%,420px);padding:28px 22px 24px;border-radius:24px;text-align:center;background:rgba(28,13,32,.90);border:1px solid rgba(255,255,255,.13);box-shadow:0 28px 80px rgba(0,0,0,.42);backdrop-filter:blur(18px);color:#fff}
+.browser-icon{font-size:34px;margin-bottom:12px}.browser-title{font-size:20px;font-weight:900;letter-spacing:-.03em}.browser-text{margin:9px auto 18px;max-width:330px;font-size:13px;line-height:1.55;color:rgba(255,255,255,.70)}
+.browser-open,.browser-copy{width:100%;min-height:48px;border-radius:14px;font-weight:850;cursor:pointer}
+.browser-open{border:1px solid rgba(225,150,234,.55);background:linear-gradient(135deg,#86469e,#ad4d91);color:#fff;box-shadow:0 12px 30px rgba(120,45,130,.24)}
+.browser-copy{margin-top:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#fff}
+.browser-help{margin-top:14px;font-size:11px;line-height:1.5;color:rgba(255,255,255,.48)}
 canvas{display:none}
 @media(max-width:520px){.shell{height:64vh;min-height:430px;border-radius:22px}.guide{width:76%}}
 </style>
 </head>
 <body>
 <div class="shell" id="shell">
-  <video id="video" autoplay playsinline muted></video>
+  <div class="browser-gate" id="browserGate">
+    <div class="browser-card">
+      <div class="browser-icon">🌐</div>
+      <div class="browser-title">Mở bằng trình duyệt</div>
+      <div class="browser-text">FreshTag phát hiện bạn đang mở bằng Zalo hoặc trình duyệt nhúng. Hãy mở bằng Safari hoặc Chrome để sử dụng camera.</div>
+      <button class="browser-open" id="browserOpen">MỞ BẰNG TRÌNH DUYỆT</button>
+      <button class="browser-copy" id="browserCopy">SAO CHÉP LINK</button>
+      <div class="browser-help" id="browserHelp">Nếu nút trên vẫn mở trong Zalo: nhấn ⋯ của Zalo → Mở bằng trình duyệt.</div>
+    </div>
+  </div>
+  <video id="video" autoplay playsinline webkit-playsinline muted disablepictureinpicture></video>
   <canvas id="canvas"></canvas>
   <div class="shade"></div>
   <div class="guide"></div>
@@ -53,10 +74,54 @@ canvas{display:none}
   const status = document.getElementById("status");
   const shutter = document.getElementById("shutter");
   const retry = document.getElementById("retry");
+  const browserGate = document.getElementById("browserGate");
+  const browserOpen = document.getElementById("browserOpen");
+  const browserCopy = document.getElementById("browserCopy");
+  const browserHelp = document.getElementById("browserHelp");
 
   let stream = null;
   let starting = false;
   let started = false;
+  let appUrl = "https://smart-tag-freshness-9upgtxr2ipvvjozmqmqq3q.streamlit.app/";
+
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || navigator.vendor || "";
+    return /Zalo/i.test(ua) || /FBAN|FBAV|FB_IAB|Instagram|Messenger/i.test(ua);
+  }
+  function isAndroid() { return /Android/i.test(navigator.userAgent || ""); }
+  function showBrowserGate() {
+    stopCamera();
+    browserGate.classList.add("show");
+    shutter.disabled = true;
+    status.style.display = "none";
+    retry.style.display = "none";
+    setFrameHeight();
+  }
+  async function copyAppUrl() {
+    try {
+      await navigator.clipboard.writeText(appUrl);
+      browserCopy.textContent = "ĐÃ SAO CHÉP LINK ✓";
+    } catch (_) {
+      const ta = document.createElement("textarea");
+      ta.value = appUrl; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); browserCopy.textContent = "ĐÃ SAO CHÉP LINK ✓"; } catch (_) {}
+      ta.remove();
+    }
+  }
+  function openExternalBrowser() {
+    // Android: yêu cầu Chrome ngoài app bằng intent. iOS không có URL scheme công khai để ép Safari.
+    if (isAndroid()) {
+      try {
+        const noScheme = appUrl.replace(/^https?:\/\//, "");
+        window.top.location.href = `intent://${noScheme}#Intent;scheme=https;package=com.android.chrome;end`;
+        return;
+      } catch (_) {}
+    }
+    // iOS/Zalo: thử mở tab ngoài; nếu Zalo giữ trong app, người dùng dùng menu ⋯.
+    try { window.open(appUrl, "_blank", "noopener,noreferrer"); } catch (_) {}
+    copyAppUrl();
+    browserHelp.textContent = "Nếu vẫn ở Zalo: nhấn ⋯ → Mở bằng Safari/Trình duyệt. Link đã được sao chép để dự phòng.";
+  }
 
   function sendMessage(type, data = {}) {
     window.parent.postMessage(Object.assign({isStreamlitMessage:true,type:type}, data), "*");
@@ -91,31 +156,38 @@ canvas{display:none}
     if (err.name === "NotAllowedError" || err.name === "SecurityError") return "Camera đang bị chặn. Hãy cho phép quyền Camera cho trang này rồi thử lại.";
     if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") return "Không tìm thấy camera trên thiết bị.";
     if (err.name === "NotReadableError" || err.name === "TrackStartError") return "Camera đang được ứng dụng khác sử dụng.";
+    if ((err.message || "").includes("chưa phát hình ảnh")) return "Đã có quyền camera nhưng trình duyệt chưa phát hình. Hãy thử mở FreshTag trực tiếp bằng Safari/Chrome thay vì trình duyệt nhúng.";
     return "Không thể mở camera: " + (err.message || err.name || "lỗi không xác định");
   }
   async function attachStream(mediaStream) {
     stream = mediaStream;
+
+    video.controls = false;
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.srcObject = stream;
 
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Camera không trả về hình ảnh.")), 8000);
-      function ready() {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          clearTimeout(timer);
-          video.removeEventListener("loadedmetadata", ready);
-          video.removeEventListener("canplay", ready);
-          resolve();
-        }
-      }
-      video.addEventListener("loadedmetadata", ready);
-      video.addEventListener("canplay", ready);
-      ready();
-    });
-
+    // Safari/iOS sometimes needs play() more than once while metadata is arriving.
     try { await video.play(); } catch (_) {}
-    await new Promise(r => setTimeout(r, 300));
 
-    if (!video.videoWidth || !video.videoHeight) throw new Error("Camera đã mở nhưng chưa có khung hình.");
+    const startedAt = Date.now();
+    while ((!video.videoWidth || !video.videoHeight || video.readyState < 2) &&
+           Date.now() - startedAt < 15000) {
+      try { await video.play(); } catch (_) {}
+      await new Promise(r => setTimeout(r, 180));
+    }
+
+    if (!video.videoWidth || !video.videoHeight) {
+      throw new Error("Camera đã được cấp quyền nhưng trình duyệt chưa phát hình ảnh.");
+    }
+
+    // Wait for a couple of real frames before enabling shutter.
+    await new Promise(r => requestAnimationFrame(() =>
+      requestAnimationFrame(() => r())
+    ));
 
     started = true;
     starting = false;
@@ -124,6 +196,7 @@ canvas{display:none}
     hideStatus();
     setFrameHeight();
   }
+
   async function getPreferredCamera() {
     try {
       return await navigator.mediaDevices.getUserMedia({
@@ -165,11 +238,26 @@ canvas{display:none}
     } catch (err) {
       stopCamera();
       shell.classList.add("error");
-      setStatus(errorMessage(err));
+      if ((err.message || "").includes("chưa phát hình ảnh")) {
+        setStatus("Đã có quyền camera nhưng trình duyệt chưa phát hình. Bấm THỬ LẠI CAMERA; nếu vẫn lỗi, mở FreshTag trực tiếp bằng Safari/Chrome.");
+      } else {
+        setStatus(errorMessage(err));
+      }
       setFrameHeight();
       console.error("FreshTag camera error:", err);
     }
   }
+
+
+  browserOpen.addEventListener("click", openExternalBrowser);
+  browserCopy.addEventListener("click", copyAppUrl);
+
+  video.addEventListener("pause", () => {
+    if (stream && stream.active) {
+      video.play().catch(() => {});
+    }
+  });
+  video.addEventListener("contextmenu", e => e.preventDefault());
 
   shutter.addEventListener("click", () => {
     if (!started || !video.videoWidth || !video.videoHeight) return;
@@ -194,6 +282,11 @@ canvas{display:none}
 
   window.addEventListener("message", event => {
     if (!event.data || event.data.type !== RENDER) return;
+    if (event.data.args && event.data.args.app_url) appUrl = event.data.args.app_url;
+    if (isInAppBrowser()) {
+      showBrowserGate();
+      return;
+    }
     startCamera(false);
     setFrameHeight();
   });
@@ -202,7 +295,10 @@ canvas{display:none}
   setFrameHeight();
 
   // Fallback nếu trình duyệt/Streamlit chậm gửi render event.
-  setTimeout(() => startCamera(false), 700);
+  setTimeout(() => {
+    if (isInAppBrowser()) showBrowserGate();
+    else startCamera(false);
+  }, 700);
 })();
 </script>
 </body>
