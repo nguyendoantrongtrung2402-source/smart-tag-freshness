@@ -6,22 +6,19 @@ import streamlit as st
 from PIL import Image
 
 # ============================================================
-# FreshTag — giao diện người dùng tối giản
-# Flow duy nhất:
+# FreshTag — UI consumer-first
+# Flow:
 #   Chụp / tải ảnh -> tự phân tích -> hiện kết quả
 #
-# Khi có model thật, đặt file "model.joblib" cùng thư mục app.py.
+# Khi có model thật, đặt "model.joblib" cùng thư mục app.py.
 # ============================================================
 
 MODEL_PATH = Path("model.joblib")
 
-# ROI cố định — cần chỉnh lại theo ảnh thật từ hộp chụp.
+# ROI tạm thời. Chỉnh lại khi chốt vị trí camera/thẻ trong hộp chụp.
 INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
-GRAY_CARD_ROI = (0.03, 0.03, 0.18, 0.18)
-GRAY_TARGET_RGB = np.array([200.0, 200.0, 200.0], dtype=float)
 
-# Chỉ để thử UI trước khi có model nghiên cứu thật.
-# Không dùng kết quả này làm dữ liệu/bằng chứng khoa học.
+# Demo centroids chỉ để app hoạt động trước khi có dữ liệu/model thật.
 DEMO_CENTROIDS = {
     "fresh": np.array([205.0, 95.0, 135.0]),
     "transition": np.array([145.0, 110.0, 165.0]),
@@ -30,25 +27,31 @@ DEMO_CENTROIDS = {
 
 RESULTS = {
     "fresh": {
-        "icon": "✓",
+        "emoji": "✓",
+        "eyebrow": "TRẠNG THÁI",
         "title": "CÒN TƯƠI",
-        "message": "Thực phẩm đang ở trạng thái còn tươi.",
+        "message": "Có thể tiếp tục bảo quản và sử dụng theo điều kiện phù hợp.",
         "class": "fresh",
     },
     "transition": {
-        "icon": "!",
+        "emoji": "!",
+        "eyebrow": "TRẠNG THÁI",
         "title": "NÊN SỬ DỤNG SỚM",
         "message": "Thực phẩm đang chuyển trạng thái. Nên ưu tiên sử dụng sớm.",
         "class": "warning",
     },
     "spoiled": {
-        "icon": "×",
+        "emoji": "×",
+        "eyebrow": "TRẠNG THÁI",
         "title": "CÓ DẤU HIỆU HƯ HỎNG",
         "message": "Thực phẩm có dấu hiệu hư hỏng. Không nên sử dụng.",
         "class": "danger",
     },
 }
 
+# ------------------------------------------------------------
+# PAGE
+# ------------------------------------------------------------
 st.set_page_config(
     page_title="FreshTag",
     page_icon="🍃",
@@ -59,201 +62,320 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        html, body, [class*="css"] {
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system,
-                         BlinkMacSystemFont, "Segoe UI", sans-serif;
+    :root{
+        --ink:#24162c;
+        --muted:#796b80;
+        --violet:#7b3fc6;
+        --violet2:#b250c9;
+        --pink:#ee72ad;
+        --cream:#fffafd;
+        --line:rgba(91,55,108,.12);
+    }
+
+    html, body, [class*="css"]{
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stApp{
+        color:var(--ink);
+        background:
+            radial-gradient(circle at 9% 5%, rgba(230,121,198,.22), transparent 24%),
+            radial-gradient(circle at 92% 10%, rgba(127,75,202,.22), transparent 28%),
+            radial-gradient(circle at 80% 88%, rgba(255,190,103,.14), transparent 28%),
+            linear-gradient(145deg,#fffafd 0%,#f8f0fb 48%,#fff8fb 100%);
+        min-height:100vh;
+    }
+
+    #MainMenu, header, footer{ visibility:hidden; }
+
+    .block-container{
+        max-width:720px;
+        padding-top:1.2rem;
+        padding-bottom:2rem;
+    }
+
+    /* ---------- HERO ---------- */
+    .hero{
+        position:relative;
+        overflow:hidden;
+        border-radius:30px;
+        padding:28px 30px 26px;
+        margin-bottom:16px;
+        color:white;
+        background:
+            radial-gradient(circle at 86% 14%, rgba(255,255,255,.20), transparent 22%),
+            radial-gradient(circle at 12% 90%, rgba(255,186,221,.22), transparent 24%),
+            linear-gradient(135deg,#57277f 0%,#8140b0 46%,#bd4f9b 100%);
+        box-shadow:0 18px 48px rgba(96,47,119,.20);
+    }
+
+    .hero:before{
+        content:"";
+        position:absolute;
+        width:160px;
+        height:160px;
+        right:-55px;
+        bottom:-70px;
+        border:1px solid rgba(255,255,255,.15);
+        border-radius:50%;
+    }
+
+    .hero:after{
+        content:"";
+        position:absolute;
+        width:95px;
+        height:95px;
+        right:28px;
+        top:-45px;
+        border:1px solid rgba(255,255,255,.15);
+        border-radius:50%;
+    }
+
+    .brand-row{
+        display:flex;
+        align-items:center;
+        gap:12px;
+        position:relative;
+        z-index:1;
+    }
+
+    .brand-icon{
+        width:48px;
+        height:48px;
+        display:grid;
+        place-items:center;
+        border-radius:16px;
+        font-size:24px;
+        background:rgba(255,255,255,.16);
+        border:1px solid rgba(255,255,255,.20);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+    }
+
+    .brand-name{
+        font-size:1.75rem;
+        font-weight:900;
+        letter-spacing:-.05em;
+        line-height:1;
+    }
+
+    .brand-mini{
+        margin-top:4px;
+        font-size:.76rem;
+        font-weight:700;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+        color:rgba(255,255,255,.70);
+    }
+
+    .hero-copy{
+        position:relative;
+        z-index:1;
+        margin-top:24px;
+        max-width:500px;
+    }
+
+    .hero-title{
+        font-size:2rem;
+        line-height:1.08;
+        font-weight:900;
+        letter-spacing:-.05em;
+        margin:0;
+    }
+
+    .hero-sub{
+        margin-top:10px;
+        color:rgba(255,255,255,.78);
+        font-size:.95rem;
+        line-height:1.55;
+        max-width:450px;
+    }
+
+    /* ---------- ACTION CARD ---------- */
+    .action-head{
+        margin:18px 0 10px;
+        text-align:center;
+    }
+
+    .action-title{
+        font-size:1.15rem;
+        font-weight:850;
+        letter-spacing:-.02em;
+    }
+
+    .action-sub{
+        margin-top:4px;
+        color:var(--muted);
+        font-size:.86rem;
+    }
+
+    div[role="radiogroup"]{
+        width:fit-content;
+        margin:0 auto 12px auto;
+        background:rgba(255,255,255,.68);
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:5px 7px;
+        box-shadow:0 8px 24px rgba(78,45,91,.06);
+        backdrop-filter:blur(12px);
+    }
+
+    div[data-testid="stCameraInput"],
+    div[data-testid="stFileUploader"]{
+        background:rgba(255,255,255,.78);
+        border:1px solid rgba(98,55,116,.13);
+        border-radius:24px;
+        padding:8px;
+        box-shadow:0 16px 42px rgba(78,45,91,.09);
+        overflow:hidden;
+        backdrop-filter:blur(14px);
+    }
+
+    div[data-testid="stCameraInput"] video{
+        border-radius:18px !important;
+        max-height:390px !important;
+        object-fit:cover !important;
+    }
+
+    div[data-testid="stCameraInput"] button,
+    div[data-testid="stFileUploader"] button{
+        border-radius:14px !important;
+        font-weight:800 !important;
+    }
+
+    /* ---------- RESULT ---------- */
+    .result-wrap{
+        margin-top:16px;
+        border-radius:28px;
+        padding:6px;
+        background:linear-gradient(135deg,rgba(125,63,198,.28),rgba(238,114,173,.28));
+        box-shadow:0 18px 42px rgba(88,45,105,.12);
+        animation:pop .28s ease-out;
+    }
+
+    .result-card{
+        text-align:center;
+        border-radius:23px;
+        padding:28px 24px 26px;
+        background:white;
+    }
+
+    @keyframes pop{
+        from{opacity:0; transform:translateY(7px) scale(.99);}
+        to{opacity:1; transform:translateY(0) scale(1);}
+    }
+
+    .result-icon{
+        width:72px;
+        height:72px;
+        margin:0 auto 14px;
+        display:grid;
+        place-items:center;
+        border-radius:24px;
+        font-size:36px;
+        font-weight:900;
+    }
+
+    .result-eyebrow{
+        font-size:.72rem;
+        font-weight:850;
+        letter-spacing:.12em;
+        opacity:.55;
+        margin-bottom:6px;
+    }
+
+    .result-title{
+        font-size:1.6rem;
+        font-weight:950;
+        letter-spacing:-.04em;
+        line-height:1.14;
+    }
+
+    .result-message{
+        margin:9px auto 0;
+        max-width:430px;
+        font-size:.92rem;
+        line-height:1.55;
+        opacity:.76;
+    }
+
+    .fresh .result-icon{
+        color:#17764a;
+        background:#e7f7ee;
+    }
+    .fresh .result-title{color:#17764a;}
+
+    .warning .result-icon{
+        color:#94630b;
+        background:#fff2cf;
+    }
+    .warning .result-title{color:#94630b;}
+
+    .danger .result-icon{
+        color:#a03445;
+        background:#ffe8ec;
+    }
+    .danger .result-title{color:#a03445;}
+
+    .note{
+        text-align:center;
+        max-width:520px;
+        margin:14px auto 0;
+        color:#95899a;
+        font-size:.69rem;
+        line-height:1.45;
+    }
+
+    /* Compact desktop feel */
+    @media (min-width: 760px){
+        .block-container{ padding-top:1rem; }
+        .hero{ padding:26px 32px 24px; }
+        .hero-copy{ margin-top:20px; }
+    }
+
+    /* Mobile */
+    @media (max-width: 560px){
+        .block-container{
+            padding-top:.65rem;
+            padding-left:.85rem;
+            padding-right:.85rem;
         }
 
-        .stApp {
-            background:
-                radial-gradient(circle at 50% -10%, rgba(133, 78, 177, .16), transparent 30%),
-                #fbf9fc;
-            color: #241b29;
+        .hero{
+            border-radius:24px;
+            padding:22px 20px 21px;
         }
 
-        #MainMenu, header, footer {
-            visibility: hidden;
+        .brand-icon{
+            width:44px;
+            height:44px;
+            border-radius:14px;
         }
 
-        .block-container {
-            max-width: 520px;
-            padding-top: 2.1rem;
-            padding-bottom: 3rem;
+        .brand-name{ font-size:1.55rem; }
+        .hero-title{ font-size:1.62rem; }
+        .hero-sub{ font-size:.89rem; }
+
+        .result-card{
+            padding:25px 17px 22px;
         }
 
-        .brand {
-            text-align: center;
-            margin-bottom: 26px;
+        .result-title{
+            font-size:1.38rem;
         }
 
-        .logo {
-            width: 58px;
-            height: 58px;
-            margin: 0 auto 12px;
-            border-radius: 18px;
-            display: grid;
-            place-items: center;
-            color: white;
-            font-size: 28px;
-            background: linear-gradient(145deg, #9c62c7, #744092);
-            box-shadow: 0 12px 32px rgba(116,64,146,.18);
+        div[role="radiogroup"]{
+            width:100%;
         }
-
-        .brand-name {
-            font-size: 2rem;
-            font-weight: 850;
-            letter-spacing: -.05em;
-            line-height: 1;
-        }
-
-        .tagline {
-            margin-top: 9px;
-            color: #7d7282;
-            font-size: .94rem;
-        }
-
-        .intro {
-            text-align: center;
-            margin: 8px 0 20px;
-        }
-
-        .intro-title {
-            font-size: 1.18rem;
-            font-weight: 800;
-            margin-bottom: 6px;
-        }
-
-        .intro-text {
-            color: #85788b;
-            font-size: .9rem;
-            line-height: 1.5;
-        }
-
-        div[data-testid="stCameraInput"],
-        div[data-testid="stFileUploader"] {
-            background: #ffffff;
-            border: 1px solid #ece5ef;
-            border-radius: 20px;
-            padding: 6px;
-            box-shadow: 0 8px 26px rgba(57,35,66,.05);
-        }
-
-        div[role="radiogroup"] {
-            background: #f1edf4;
-            border-radius: 14px;
-            padding: 4px;
-            margin-bottom: 14px;
-        }
-
-        .analyzing {
-            text-align: center;
-            color: #7d7282;
-            font-size: .92rem;
-            padding: 12px 0 4px;
-        }
-
-        .result-card {
-            margin-top: 20px;
-            border-radius: 26px;
-            padding: 30px 22px 26px;
-            text-align: center;
-            border: 1px solid transparent;
-            animation: enter .28s ease-out;
-        }
-
-        @keyframes enter {
-            from { opacity: 0; transform: translateY(5px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .result-card.fresh {
-            background: #eef9f2;
-            border-color: #d5efde;
-            color: #21653e;
-        }
-
-        .result-card.warning {
-            background: #fff8e8;
-            border-color: #f6e6ba;
-            color: #805f14;
-        }
-
-        .result-card.danger {
-            background: #fff0f0;
-            border-color: #f4d4d4;
-            color: #8a3030;
-        }
-
-        .result-icon {
-            width: 68px;
-            height: 68px;
-            margin: 0 auto 15px;
-            border-radius: 50%;
-            display: grid;
-            place-items: center;
-            background: rgba(255,255,255,.72);
-            font-size: 34px;
-            font-weight: 800;
-        }
-
-        .result-caption {
-            font-size: .76rem;
-            font-weight: 800;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-            opacity: .62;
-            margin-bottom: 7px;
-        }
-
-        .result-title {
-            font-size: 1.55rem;
-            font-weight: 900;
-            letter-spacing: -.035em;
-            line-height: 1.18;
-        }
-
-        .result-message {
-            margin: 10px auto 0;
-            max-width: 360px;
-            font-size: .94rem;
-            line-height: 1.55;
-            opacity: .82;
-        }
-
-        .small-note {
-            text-align: center;
-            margin: 18px auto 0;
-            max-width: 410px;
-            color: #958a99;
-            font-size: .72rem;
-            line-height: 1.45;
-        }
-
-        @media (max-width: 480px) {
-            .block-container {
-                padding-top: 1.3rem;
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-
-            .brand-name {
-                font-size: 1.75rem;
-            }
-
-            .result-card {
-                padding: 26px 17px 22px;
-            }
-
-            .result-title {
-                font-size: 1.35rem;
-            }
-        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
+# ------------------------------------------------------------
+# IMAGE + MODEL
+# ------------------------------------------------------------
 def crop_roi(image, roi):
     w, h = image.size
     x1, y1, x2, y2 = roi
@@ -271,23 +393,10 @@ def median_rgb(image):
     return tuple(int(round(v)) for v in rgb)
 
 
-def calibrate_rgb(sample_rgb, gray_rgb):
-    sample = np.asarray(sample_rgb, dtype=float)
-    gray = np.clip(np.asarray(gray_rgb, dtype=float), 20.0, 245.0)
-    gains = np.clip(GRAY_TARGET_RGB / gray, 0.65, 1.55)
-    corrected = np.clip(sample * gains, 0, 255)
-    return tuple(int(round(v)) for v in corrected)
-
-
 def make_features(rgb):
     r, g, b = rgb
     h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-    return np.array([[
-        r, g, b,
-        h * 360,
-        s * 100,
-        v * 100,
-    ]], dtype=float)
+    return np.array([[r, g, b, h * 360, s * 100, v * 100]], dtype=float)
 
 
 @st.cache_resource
@@ -304,7 +413,6 @@ def load_model():
 
 def normalize_label(label):
     t = str(label).strip().lower()
-
     mapping = {
         "fresh": "fresh",
         "còn tươi": "fresh",
@@ -325,7 +433,6 @@ def normalize_label(label):
         "co dau hieu hu hong": "spoiled",
         "2": "spoiled",
     }
-
     return mapping.get(t)
 
 
@@ -333,70 +440,76 @@ def demo_predict(rgb):
     arr = np.asarray(rgb, dtype=float)
     return min(
         DEMO_CENTROIDS,
-        key=lambda k: np.linalg.norm(arr - DEMO_CENTROIDS[k]),
+        key=lambda key: np.linalg.norm(arr - DEMO_CENTROIDS[key]),
     )
 
 
 def analyze(image):
-    sample_crop = crop_roi(image, INDICATOR_ROI)
-    gray_crop = crop_roi(image, GRAY_CARD_ROI)
-
-    sample_rgb = median_rgb(sample_crop)
-    gray_rgb = median_rgb(gray_crop)
-    final_rgb = calibrate_rgb(sample_rgb, gray_rgb)
-
+    crop = crop_roi(image, INDICATOR_ROI)
+    rgb = median_rgb(crop)
     model = load_model()
 
     if model is not None:
-        raw_label = model.predict(make_features(final_rgb))[0]
-        label = normalize_label(raw_label)
+        raw = model.predict(make_features(rgb))[0]
+        label = normalize_label(raw)
         if label is None:
-            raise ValueError("Nhãn đầu ra của mô hình chưa đúng định dạng.")
+            raise ValueError("Nhãn mô hình không hợp lệ.")
         return label
 
-    # Chỉ phục vụ chạy thử giao diện trong giai đoạn chưa có model thật.
-    return demo_predict(final_rgb)
+    return demo_predict(rgb)
 
 
 def show_result(label):
-    result = RESULTS[label]
-
+    r = RESULTS[label]
     st.markdown(
         f"""
-        <div class="result-card {result['class']}" role="status" aria-live="polite">
-            <div class="result-icon">{result['icon']}</div>
-            <div class="result-caption">Kết quả</div>
-            <div class="result-title">{result['title']}</div>
-            <div class="result-message">{result['message']}</div>
+        <div class="result-wrap">
+            <div class="result-card {r['class']}" role="status" aria-live="polite">
+                <div class="result-icon">{r['emoji']}</div>
+                <div class="result-eyebrow">{r['eyebrow']}</div>
+                <div class="result-title">{r['title']}</div>
+                <div class="result-message">{r['message']}</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-# ------------------ UI ------------------
-
+# ------------------------------------------------------------
+# UI
+# ------------------------------------------------------------
 st.markdown(
     """
-    <div class="brand">
-        <div class="logo">🍃</div>
-        <div class="brand-name">FreshTag</div>
-        <div class="tagline">Kiểm tra trạng thái thực phẩm bằng thẻ chỉ thị màu</div>
+    <div class="hero">
+        <div class="brand-row">
+            <div class="brand-icon">🍃</div>
+            <div>
+                <div class="brand-name">FreshTag</div>
+                <div class="brand-mini">Smart freshness indicator</div>
+            </div>
+        </div>
+
+        <div class="hero-copy">
+            <div class="hero-title">Chụp một lần.<br>Biết trạng thái ngay.</div>
+            <div class="hero-sub">
+                Dùng thẻ chỉ thị màu để nhận biết nhanh trạng thái thực phẩm.
+                Đơn giản, trực quan và dễ sử dụng.
+            </div>
+        </div>
     </div>
 
-    <div class="intro">
-        <div class="intro-title">Chụp thẻ chỉ thị để kiểm tra</div>
-        <div class="intro-text">
-            Đặt thẻ đúng vị trí trong khung chụp, sau đó chụp ảnh hoặc chọn ảnh có sẵn.
-        </div>
+    <div class="action-head">
+        <div class="action-title">Kiểm tra ngay</div>
+        <div class="action-sub">Chụp thẻ chỉ thị hoặc chọn ảnh có sẵn</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 mode = st.radio(
-    "Chọn cách nhập ảnh",
-    ["📷 Chụp ảnh", "🖼️ Chọn từ thư viện"],
+    "Nguồn ảnh",
+    ["📷 Chụp ảnh", "🖼️ Thư viện"],
     horizontal=True,
     label_visibility="collapsed",
 )
@@ -418,18 +531,15 @@ else:
 if image_file is not None:
     try:
         image = Image.open(image_file).convert("RGB")
-
-        # Không cần nút "Phân tích": có ảnh là xử lý ngay.
         label = analyze(image)
         show_result(label)
-
     except Exception:
         st.error("Không thể đọc ảnh. Vui lòng chụp lại hoặc chọn ảnh khác.")
 
 st.markdown(
     """
-    <div class="small-note">
-        Kết quả chỉ mang tính hỗ trợ nhận định và không thay thế kiểm nghiệm an toàn thực phẩm.
+    <div class="note">
+        Kết quả mang tính hỗ trợ nhận định và không thay thế kiểm nghiệm an toàn thực phẩm.
     </div>
     """,
     unsafe_allow_html=True,
