@@ -1,241 +1,783 @@
-import streamlit as st
+import os
+import colorsys
+from pathlib import Path
+
 import numpy as np
-from PIL import Image
+import streamlit as st
+from PIL import Image, ImageDraw
 
-# Hàm làm sạch chuỗi HTML/CSS loại bỏ lùi đầu dòng thừa
-def _html(s: str) -> str:
-    return "\n".join(line.strip() for line in s.strip().split("\n"))
+# ============================================================
+# FRESHTAG - ỨNG DỤNG PHÂN LOẠI TRẠNG THÁI ỨC GÀ
+# Thẻ chỉ thị chitosan - tía tô + ảnh smartphone + mô hình ML
+#
+# LƯU Ý KHOA HỌC
+# - Không hiển thị "% độ tươi".
+# - Không khẳng định "an toàn để ăn".
+# - Đầu ra chính: 3 trạng thái.
+# - Nếu chưa có model.joblib, app chạy ở CHẾ ĐỘ DEMO để thử giao diện.
+# ============================================================
 
-# -----------------------------------------------------------------------------
-# 1. BẢNG DỮ LIỆU HIỆU CHUẨN MÀU HÓA HỌC (RGB vs pH)
-# -----------------------------------------------------------------------------
-REF_DATA = [
-    {"pH": 3.0,  "rgb": (220, 60, 80)},
-    {"pH": 5.0,  "rgb": (210, 110, 140)},
-    {"pH": 7.0,  "rgb": (140, 120, 170)},
-    {"pH": 9.0,  "rgb": (90, 140, 160)},
-    {"pH": 11.0, "rgb": (50, 120, 100)}
-]
-CALIBRATION_TARGET_RGB = np.array([200.0, 200.0, 200.0])
 
-# -----------------------------------------------------------------------------
-# 2. HÀM TÍNH TOÁN BACKEND
-# -----------------------------------------------------------------------------
-def pH_to_freshness(ph, ph_fresh=6.0, ph_spoiled=8.5):
-    if ph <= ph_fresh:
-        return 100.0
-    elif ph >= ph_spoiled:
-        return 0.0
-    return max(0.0, min(100.0, 100.0 * (ph_spoiled - ph) / (ph_spoiled - ph_fresh)))
+# -----------------------------
+# 1. CẤU HÌNH ỨNG DỤNG
+# -----------------------------
+APP_NAME = "FreshTag"
+APP_SUBTITLE = "Phân loại trạng thái ức gà bằng thẻ chỉ thị tía tô"
 
-def calculate_idw(target_rgb):
-    eps = 1e-6
-    target_arr = np.array(target_rgb)
-    weights = [1.0 / ((np.linalg.norm(target_arr - np.array(item["rgb"])) + eps) ** 2) for item in REF_DATA]
-    sum_w = sum(weights)
-    est_ph = sum(item["pH"] * w for item, w in zip(REF_DATA, weights)) / sum_w
-    return round(float(est_ph), 2), round(float(pH_to_freshness(est_ph)), 1)
+MODEL_PATH = Path("model.joblib")
 
-def extract_center_rgb_median(image: Image.Image, crop_ratio=0.3):
-    img_arr = np.array(image.convert("RGB"))
-    h, w, _ = img_arr.shape
-    ch_s, ch_e = int(h * (0.5 - crop_ratio/2)), int(h * (0.5 + crop_ratio/2))
-    cw_s, cw_e = int(w * (0.5 - crop_ratio/2)), int(w * (0.5 + crop_ratio/2))
-    region = img_arr[ch_s:ch_e, cw_s:cw_e]
-    return tuple(map(int, np.median(region, axis=(0, 1))))
+# ROI tính theo tỉ lệ ảnh: (x1, y1, x2, y2), từ 0 đến 1.
+# Hãy chỉnh các giá trị này sau khi vị trí camera + thẻ trong hộp chụp đã cố định.
+INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
 
-def extract_card_rgb_median(image: Image.Image, size_ratio=0.15):
-    """Cắt vùng góc trên-trái (15% chiều rộng/cao) chứa thẻ tham chiếu màu"""
-    img_arr = np.array(image.convert("RGB"))
-    h, w, _ = img_arr.shape
-    region = img_arr[0:int(h*size_ratio), 0:int(w*size_ratio)]
-    return tuple(map(int, np.median(region, axis=(0, 1))))
+# Vùng thẻ xám/thẻ tham chiếu. Mặc định nằm ở góc trên-trái.
+GRAY_CARD_ROI = (0.03, 0.03, 0.18, 0.18)
 
-def apply_color_calibration(measured_rgb, card_rgb):
-    eps = 1e-6
-    scale = CALIBRATION_TARGET_RGB / (np.array(card_rgb, dtype=float) + eps)
-    calibrated = np.clip(np.array(measured_rgb, dtype=float) * scale, 0, 255)
-    return tuple(map(int, calibrated))
+# Màu mục tiêu của thẻ xám dùng để cân chỉnh đơn giản.
+# Có thể thay đổi sau khi nhóm chốt thẻ tham chiếu thật.
+GRAY_TARGET_RGB = np.array([200.0, 200.0, 200.0], dtype=float)
 
-# -----------------------------------------------------------------------------
-# 3. VÒNG TRÒN TIẾN ĐỘ (SVG)
-# -----------------------------------------------------------------------------
-def render_progress_ring(percent, color_hex, size=132, stroke=10):
-    radius = (size - stroke) / 2
-    circumference = 2 * 3.14159265 * radius
-    offset = circumference * (1 - percent / 100)
-    return _html(f"""
-    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="transform: rotate(-90deg); width: 100%; height: 100%;">
-        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="{stroke}" />
-        <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none" stroke="{color_hex}" stroke-width="{stroke}" stroke-linecap="round" stroke-dasharray="{circumference}" stroke-dashoffset="{offset}" style="transition: stroke-dashoffset 0.6s ease;" />
-    </svg>
-    """)
+# Thứ tự đặc trưng phải trùng với lúc huấn luyện model.
+FEATURE_COLUMNS = ["R", "G", "B", "H", "S", "V"]
 
-# -----------------------------------------------------------------------------
-# 4. CẤU HÌNH TRANG & THIẾT KẾ MỚI
-# -----------------------------------------------------------------------------
+# Tên lớp chuẩn của đề tài.
+CLASS_LABELS = {
+    "fresh": "CÒN TƯƠI",
+    "transition": "NÊN SỬ DỤNG SỚM",
+    "spoiled": "CÓ DẤU HIỆU HƯ HỎNG",
+}
+
+# Demo centroids CHỈ để chạy thử UI trước khi có dữ liệu thật.
+# PHẢI thay bằng model.joblib đã huấn luyện từ dữ liệu thí nghiệm.
+DEMO_CENTROIDS = {
+    "fresh": np.array([205.0, 95.0, 135.0]),
+    "transition": np.array([145.0, 110.0, 165.0]),
+    "spoiled": np.array([75.0, 135.0, 125.0]),
+}
+
+
+# -----------------------------
+# 2. CẤU HÌNH STREAMLIT
+# -----------------------------
 st.set_page_config(
-    page_title="SaveMyFood - Quản Lý Độ Tươi Thực Phẩm",
-    page_icon="🌿",
+    page_title=f"{APP_NAME} - Thẻ chỉ thị tía tô",
+    page_icon="🟣",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-st.markdown(_html("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
+# -----------------------------
+# 3. CSS
+# -----------------------------
+st.markdown(
+    """
+    <style>
+        :root {
+            --bg: #0d0a12;
+            --panel: #17111f;
+            --panel-2: #20162a;
+            --text: #f7f2fb;
+            --muted: #a99daf;
+            --purple: #b978ff;
+            --purple-2: #8e44d6;
+            --fresh: #43c982;
+            --warning: #f2b84b;
+            --danger: #ef6262;
+            --border: rgba(255,255,255,.10);
+        }
 
-    .stApp {
-        background: radial-gradient(circle at 20% 0%, #0F2318 0%, #0A130E 45%, #08100C 100%);
-        color: #EAF6EE;
+        html, body, [class*="css"] {
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+                         "Segoe UI", sans-serif;
+        }
+
+        .stApp {
+            background:
+                radial-gradient(circle at 20% 0%, rgba(116, 68, 148, .22), transparent 32%),
+                linear-gradient(180deg, #100b16 0%, #0b0910 100%);
+            color: var(--text);
+        }
+
+        #MainMenu, header, footer {
+            visibility: hidden;
+        }
+
+        .block-container {
+            max-width: 660px;
+            padding-top: 1.7rem;
+            padding-bottom: 3rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 2px;
+        }
+
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, #b978ff, #6f35a9);
+            font-size: 23px;
+            box-shadow: 0 10px 30px rgba(132, 71, 178, .25);
+        }
+
+        .brand-name {
+            font-size: 1.75rem;
+            font-weight: 850;
+            letter-spacing: -0.04em;
+            line-height: 1;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: .95rem;
+            margin: 8px 0 22px 54px;
+        }
+
+        .card {
+            background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 20px;
+            margin: 14px 0;
+        }
+
+        .section-kicker {
+            color: #c9b9d2;
+            font-size: .78rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .section-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .helper {
+            color: var(--muted);
+            font-size: .88rem;
+            line-height: 1.55;
+        }
+
+        .result-card {
+            border-radius: 24px;
+            padding: 24px 22px;
+            border: 1px solid var(--border);
+            margin-top: 18px;
+        }
+
+        .result-fresh {
+            background: linear-gradient(160deg, rgba(67,201,130,.16), rgba(67,201,130,.04));
+        }
+
+        .result-transition {
+            background: linear-gradient(160deg, rgba(242,184,75,.16), rgba(242,184,75,.04));
+        }
+
+        .result-spoiled {
+            background: linear-gradient(160deg, rgba(239,98,98,.16), rgba(239,98,98,.04));
+        }
+
+        .result-label {
+            font-size: .78rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .result-main {
+            margin-top: 6px;
+            font-size: 1.62rem;
+            font-weight: 900;
+            letter-spacing: -.03em;
+        }
+
+        .result-desc {
+            margin-top: 8px;
+            color: #d4c9da;
+            line-height: 1.55;
+            font-size: .94rem;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .metric {
+            background: rgba(255,255,255,.035);
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: 16px;
+            padding: 13px 14px;
+        }
+
+        .metric-label {
+            font-size: .72rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            font-weight: 750;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 800;
+            margin-top: 5px;
+            overflow-wrap: anywhere;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,.32);
+            vertical-align: -4px;
+            margin-right: 7px;
+        }
+
+        .flow {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr auto 1fr;
+            align-items: center;
+            gap: 8px;
+            margin: 14px 0 4px;
+        }
+
+        .flow-node {
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,.035);
+            border-radius: 14px;
+            padding: 12px 8px;
+            text-align: center;
+            font-size: .82rem;
+            font-weight: 750;
+        }
+
+        .flow-arrow {
+            color: #8f8197;
+            font-weight: 900;
+        }
+
+        .disclaimer {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(185,120,255,.18);
+            background: rgba(185,120,255,.06);
+            color: #c8bacf;
+            font-size: .82rem;
+            line-height: 1.55;
+        }
+
+        div[data-testid="stCameraInput"],
+        div[data-testid="stFileUploader"] {
+            border-radius: 18px;
+        }
+
+        div.stButton > button {
+            width: 100%;
+            min-height: 48px;
+            border-radius: 14px;
+            border: 1px solid rgba(185,120,255,.28);
+            background: linear-gradient(135deg, #a661e8, #7b3bb2);
+            color: white;
+            font-weight: 800;
+        }
+
+        div.stButton > button:hover {
+            border-color: rgba(255,255,255,.35);
+            color: white;
+        }
+
+        @media (max-width: 520px) {
+            .metric-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+                text-align: center;
+            }
+
+            .subtitle {
+                margin-left: 0;
+            }
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# -----------------------------
+# 4. HÀM XỬ LÝ ẢNH
+# -----------------------------
+def clamp_roi(roi):
+    x1, y1, x2, y2 = roi
+    vals = [max(0.0, min(1.0, float(v))) for v in (x1, y1, x2, y2)]
+    x1, y1, x2, y2 = vals
+
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("ROI không hợp lệ.")
+
+    return x1, y1, x2, y2
+
+
+def crop_fractional_roi(image: Image.Image, roi):
+    x1, y1, x2, y2 = clamp_roi(roi)
+    w, h = image.size
+
+    left = int(round(x1 * w))
+    top = int(round(y1 * h))
+    right = int(round(x2 * w))
+    bottom = int(round(y2 * h))
+
+    left = max(0, min(w - 1, left))
+    top = max(0, min(h - 1, top))
+    right = max(left + 1, min(w, right))
+    bottom = max(top + 1, min(h, bottom))
+
+    return image.crop((left, top, right, bottom))
+
+
+def median_rgb(image: Image.Image):
+    arr = np.asarray(image.convert("RGB"), dtype=np.uint8)
+
+    if arr.size == 0:
+        raise ValueError("Vùng ảnh rỗng.")
+
+    values = np.median(arr.reshape(-1, 3), axis=0)
+    return tuple(int(round(v)) for v in values)
+
+
+def apply_gray_calibration(sample_rgb, gray_rgb):
+    sample = np.asarray(sample_rgb, dtype=float)
+    gray = np.asarray(gray_rgb, dtype=float)
+
+    # Tránh chia cho 0 hoặc hiệu chỉnh cực đoan.
+    gray = np.clip(gray, 20.0, 245.0)
+
+    gains = GRAY_TARGET_RGB / gray
+    gains = np.clip(gains, 0.65, 1.55)
+
+    corrected = np.clip(sample * gains, 0, 255)
+    return tuple(int(round(v)) for v in corrected)
+
+
+def rgb_to_hsv_features(rgb):
+    r, g, b = [v / 255.0 for v in rgb]
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+
+    # H: độ, S/V: %
+    return round(h * 360.0, 2), round(s * 100.0, 2), round(v * 100.0, 2)
+
+
+def build_feature_vector(rgb):
+    r, g, b = rgb
+    h, s, v = rgb_to_hsv_features(rgb)
+    return np.array([[r, g, b, h, s, v]], dtype=float), (h, s, v)
+
+
+def draw_roi_overlay(image: Image.Image, indicator_roi, gray_roi=None):
+    preview = image.convert("RGB").copy()
+    draw = ImageDraw.Draw(preview)
+    w, h = preview.size
+
+    def rect_from_roi(roi):
+        x1, y1, x2, y2 = clamp_roi(roi)
+        return (
+            int(x1 * w),
+            int(y1 * h),
+            int(x2 * w),
+            int(y2 * h),
+        )
+
+    # Tím: vùng thẻ chỉ thị
+    ir = rect_from_roi(indicator_roi)
+    width = max(2, int(min(w, h) * 0.008))
+    draw.rectangle(ir, outline=(190, 120, 255), width=width)
+
+    # Xám: vùng thẻ tham chiếu
+    if gray_roi is not None:
+        gr = rect_from_roi(gray_roi)
+        draw.rectangle(gr, outline=(220, 220, 220), width=width)
+
+    return preview
+
+
+# -----------------------------
+# 5. MODEL
+# -----------------------------
+@st.cache_resource
+def load_trained_model():
+    if not MODEL_PATH.exists():
+        return None
+
+    try:
+        import joblib
+        return joblib.load(MODEL_PATH)
+    except Exception:
+        return None
+
+
+def normalize_model_label(raw_label):
+    text = str(raw_label).strip().lower()
+
+    mapping = {
+        "fresh": "fresh",
+        "còn tươi": "fresh",
+        "con tuoi": "fresh",
+        "0": "fresh",
+
+        "transition": "transition",
+        "chuyển tiếp": "transition",
+        "chuyen tiep": "transition",
+        "nên sử dụng sớm": "transition",
+        "nen su dung som": "transition",
+        "1": "transition",
+
+        "spoiled": "spoiled",
+        "hư hỏng": "spoiled",
+        "hu hong": "spoiled",
+        "có dấu hiệu hư hỏng": "spoiled",
+        "co dau hieu hu hong": "spoiled",
+        "2": "spoiled",
     }
-    #MainMenu, header, footer { visibility: hidden; }
-    .block-container { padding-top: 1.6rem; padding-bottom: 2rem; max-width: 480px; }
 
-    .app-title {
-        font-size: 1.7rem; font-weight: 800; letter-spacing: -0.5px;
-        background: linear-gradient(90deg, #3DDC84, #A7F3C4);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        margin-bottom: 2px;
+    if text in mapping:
+        return mapping[text]
+
+    raise ValueError(
+        f"Nhãn model '{raw_label}' chưa được ánh xạ. "
+        "Hãy sửa hàm normalize_model_label()."
+    )
+
+
+def predict_with_model(model, feature_vector):
+    raw = model.predict(feature_vector)[0]
+    return normalize_model_label(raw)
+
+
+def predict_demo(rgb):
+    """
+    Chỉ dùng để thử giao diện khi chưa có model thật.
+    Không dùng kết quả demo làm dữ liệu nghiên cứu.
+    """
+    sample = np.asarray(rgb, dtype=float)
+    distances = {
+        label: float(np.linalg.norm(sample - centroid))
+        for label, centroid in DEMO_CENTROIDS.items()
     }
-    .app-subtitle { color: #7C9285; font-size: 0.92rem; margin-bottom: 22px; }
+    return min(distances, key=distances.get)
 
-    .glass-card {
-        background: linear-gradient(155deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 22px;
-        padding: 22px;
-        margin-bottom: 16px;
-        backdrop-filter: blur(6px);
+
+# -----------------------------
+# 6. HÀM HIỂN THỊ KẾT QUẢ
+# -----------------------------
+def result_style(label):
+    if label == "fresh":
+        return {
+            "css": "result-fresh",
+            "icon": "🟢",
+            "text": CLASS_LABELS[label],
+            "desc": "Mẫu được mô hình xếp vào nhóm còn tươi trong điều kiện thí nghiệm.",
+        }
+
+    if label == "transition":
+        return {
+            "css": "result-transition",
+            "icon": "🟡",
+            "text": CLASS_LABELS[label],
+            "desc": "Mẫu được mô hình xếp vào nhóm chuyển tiếp; nên ưu tiên sử dụng sớm.",
+        }
+
+    return {
+        "css": "result-spoiled",
+        "icon": "🔴",
+        "text": CLASS_LABELS["spoiled"],
+        "desc": "Mẫu được mô hình xếp vào nhóm có dấu hiệu hư hỏng.",
     }
 
-    .hero-flex { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .hero-label { color: #7C9285; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .hero-score { font-size: 3.2rem; font-weight: 800; line-height: 1; }
-    .hero-score-unit { font-size: 1.4rem; font-weight: 600; opacity: 0.6; margin-left: 2px; }
 
-    .ring-wrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
-    .ring-icon { position: absolute; font-size: 1.8rem; }
+def render_result(label, rgb, hsv, calibrated, mode_name):
+    style = result_style(label)
+    r, g, b = rgb
+    h, s, v = hsv
 
-    .status-pill {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 7px 16px; border-radius: 999px;
-        font-size: 0.85rem; font-weight: 700; margin-top: 14px;
-    }
-    .pill-fresh   { background: rgba(61, 220, 132, 0.14); color: #3DDC84; }
-    .pill-warning { background: rgba(255, 176, 32, 0.14); color: #FFB020; }
-    .pill-danger  { background: rgba(255, 82, 82, 0.14); color: #FF5252; }
+    calibrated_text = "Có" if calibrated else "Không"
 
-    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .metric-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px 16px; }
-    .metric-box .label { color: #7C9285; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
-    .metric-box .value { font-size: 1.35rem; font-weight: 700; }
+    st.markdown(
+        f"""
+        <div class="result-card {style['css']}">
+            <div class="result-label">Kết quả phân loại</div>
+            <div class="result-main">{style['icon']} {style['text']}</div>
+            <div class="result-desc">{style['desc']}</div>
 
-    .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); display: inline-block; vertical-align: middle; margin-right: 8px; }
+            <div class="metric-grid">
+                <div class="metric">
+                    <div class="metric-label">Màu thẻ RGB</div>
+                    <div class="metric-value">
+                        <span class="swatch" style="background: rgb({r},{g},{b});"></span>
+                        {r}, {g}, {b}
+                    </div>
+                </div>
 
-    div[data-testid="stCameraInput"] > label, div[data-testid="stFileUploader"] > label { color: #7C9285 !important; }
-    div[data-testid="stCameraInput"], div[data-testid="stFileUploader"] {
-        border: 1.5px dashed rgba(61, 220, 132, 0.35);
-        border-radius: 18px; padding: 6px;
-        background: rgba(61, 220, 132, 0.03);
-    }
+                <div class="metric">
+                    <div class="metric-label">HSV</div>
+                    <div class="metric-value">H {h:.1f}° · S {s:.1f}% · V {v:.1f}%</div>
+                </div>
 
-    @media (max-width: 420px) {
-        .hero-score { font-size: 2.5rem; }
-        .ring-wrap { width: 104px; height: 104px; }
-        .glass-card { padding: 16px; }
-    }
-</style>
-"""), unsafe_allow_html=True)
+                <div class="metric">
+                    <div class="metric-label">Hiệu chỉnh thẻ xám</div>
+                    <div class="metric-value">{calibrated_text}</div>
+                </div>
 
-# -----------------------------------------------------------------------------
-# 5. HEADER
-# -----------------------------------------------------------------------------
-st.markdown('<div class="app-title">🌿 SaveMyFood</div>', unsafe_allow_html=True)
-st.markdown('<div class="app-subtitle">Định lượng độ tươi thực phẩm qua màng chỉ thị tía tô &amp; phân tích RGB</div>', unsafe_allow_html=True)
+                <div class="metric">
+                    <div class="metric-label">Bộ phân loại</div>
+                    <div class="metric-value">{mode_name}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# -----------------------------------------------------------------------------
-# 6. KHUNG NHẬP ẢNH
-# -----------------------------------------------------------------------------
-st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-st.markdown('<div class="hero-label">📷 Thu thập hình ảnh</div>', unsafe_allow_html=True)
 
-input_mode = st.radio("Chọn phương thức nhập ảnh:", ["Chụp ảnh trực tiếp", "Tải ảnh từ thư viện"],
-                       horizontal=True, label_visibility="collapsed")
+# -----------------------------
+# 7. HEADER
+# -----------------------------
+st.markdown(
+    """
+    <div class="brand">
+        <div class="brand-mark">🍃</div>
+        <div class="brand-name">FreshTag</div>
+    </div>
+    <div class="subtitle">
+        Phân loại trạng thái ức gà bằng thẻ chỉ thị chitosan–tía tô và ảnh smartphone
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-uploaded_image = None
-if input_mode == "Chụp ảnh trực tiếp":
-    camera_file = st.camera_input("Chụp màng chỉ thị trên nắp hộp", label_visibility="collapsed")
-    if camera_file is not None:
-        uploaded_image = Image.open(camera_file)
-else:
-    file_uploaded = st.file_uploader("Chọn ảnh màng chỉ thị...", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
-    if file_uploaded is not None:
-        uploaded_image = Image.open(file_uploaded)
 
-use_calibration = st.checkbox("⚙️ Hiệu chỉnh màu tự động bằng thẻ tham chiếu")
-if use_calibration:
-    st.caption("📌 Lưu ý: Hãy đảm bảo thẻ màu chuẩn được đặt ở góc trên-trái khung hình khi chụp.")
-st.markdown('</div>', unsafe_allow_html=True)
+# -----------------------------
+# 8. TABS
+# -----------------------------
+tab_check, tab_explain = st.tabs(["🔬 Kiểm tra mẫu", "🧠 Cách hoạt động"])
 
-# -----------------------------------------------------------------------------
-# 7. KẾT QUẢ
-# -----------------------------------------------------------------------------
-if uploaded_image is not None:
-    raw_r, raw_g, raw_b = extract_center_rgb_median(uploaded_image)
 
-    if use_calibration:
-        card_rgb = extract_card_rgb_median(uploaded_image)
-        r, g, b = apply_color_calibration((raw_r, raw_g, raw_b), card_rgb)
+with tab_check:
+    model = load_trained_model()
+    is_real_model = model is not None
+
+    if is_real_model:
+        st.success("Đã tải mô hình học máy từ model.joblib.")
     else:
-        r, g, b = raw_r, raw_g, raw_b
+        st.warning(
+            "Chưa có model.joblib — ứng dụng đang chạy ở CHẾ ĐỘ DEMO để thử giao diện. "
+            "Không dùng kết quả demo làm kết quả nghiên cứu."
+        )
 
-    est_ph, est_freshness = calculate_idw((r, g, b))
+    st.markdown(
+        """
+        <div class="card">
+            <div class="section-kicker">Bước 1</div>
+            <div class="section-title">Đưa ảnh thẻ chỉ thị vào ứng dụng</div>
+            <div class="helper">
+                Nên chụp bằng cùng một điện thoại, cùng hộp ánh sáng và cùng vị trí như quy trình thí nghiệm.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    if est_freshness >= 75.0:
-        pill_class, ring_color, status_text, icon = "pill-fresh", "#3DDC84", "Tươi mới, an toàn", "🍃"
-    elif est_freshness >= 25.0:
-        pill_class, ring_color, status_text, icon = "pill-warning", "#FFB020", "Cần dùng ngay", "⚠️"
+    input_mode = st.radio(
+        "Nguồn ảnh",
+        ["📷 Chụp ảnh", "⬆️ Tải ảnh lên"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+    uploaded_file = None
+
+    if input_mode == "📷 Chụp ảnh":
+        uploaded_file = st.camera_input(
+            "Chụp ảnh thẻ chỉ thị",
+            label_visibility="collapsed",
+        )
     else:
-        pill_class, ring_color, status_text, icon = "pill-danger", "#FF5252", "Đã hỏng, không nên dùng", "⛔"
+        uploaded_file = st.file_uploader(
+            "Tải ảnh JPG/PNG",
+            type=["jpg", "jpeg", "png"],
+            label_visibility="collapsed",
+        )
 
-    ring_svg = render_progress_ring(est_freshness, ring_color)
+    use_gray_card = st.checkbox(
+        "Hiệu chỉnh màu bằng thẻ tham chiếu",
+        value=True,
+        help="Bỏ chọn nếu ảnh không có thẻ xám ở đúng vị trí đã quy định.",
+    )
 
-    st.markdown(_html(f"""
-    <div class="glass-card">
-    <div class="hero-flex">
-    <div>
-    <div class="hero-label">Chỉ số độ tươi</div>
-    <div><span class="hero-score">{est_freshness:g}</span><span class="hero-score-unit">%</span></div>
-    <div class="status-pill {pill_class}">{icon} {status_text}</div>
-    </div>
-    <div class="ring-wrap">
-    {ring_svg}
-    <div class="ring-icon">{icon}</div>
-    </div>
-    </div>
-    </div>
-    """), unsafe_allow_html=True)
+    if uploaded_file is not None:
+        try:
+            image = Image.open(uploaded_file).convert("RGB")
+        except Exception:
+            st.error("Không đọc được ảnh. Hãy thử lại bằng file JPG hoặc PNG.")
+            st.stop()
 
-    st.markdown(_html(f"""
-    <div class="glass-card">
-    <div class="hero-label" style="margin-bottom: 12px;">🔬 Chi tiết phân tích</div>
-    <div class="metric-grid">
-    <div class="metric-box">
-    <div class="label">pH dự đoán (IDW)</div>
-    <div class="value">{est_ph}</div>
-    </div>
-    <div class="metric-box">
-    <div class="label">Mã màu RGB</div>
-    <div class="value" style="font-size: 1rem;">
-    <span class="swatch" style="background: rgb({r},{g},{b});"></span>{r}, {g}, {b}
-    </div>
-    </div>
-    </div>
-    </div>
-    """), unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="card">
+                <div class="section-kicker">Bước 2</div>
+                <div class="section-title">Kiểm tra vùng đọc màu</div>
+                <div class="helper">
+                    Khung tím là vùng đọc thẻ chỉ thị. Khung xám là vùng thẻ tham chiếu.
+                    Hai vị trí này nên được cố định trong hộp chụp ảnh.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    with st.expander("Xem ảnh gốc đã chụp"):
-        st.image(uploaded_image, use_container_width=True)
+        overlay = draw_roi_overlay(
+            image,
+            INDICATOR_ROI,
+            GRAY_CARD_ROI if use_gray_card else None,
+        )
+        st.image(overlay, use_container_width=True)
+
+        analyze = st.button("✨ PHÂN TÍCH MÀU THẺ", type="primary")
+
+        if analyze:
+            try:
+                indicator_crop = crop_fractional_roi(image, INDICATOR_ROI)
+                raw_rgb = median_rgb(indicator_crop)
+
+                final_rgb = raw_rgb
+                gray_rgb = None
+
+                if use_gray_card:
+                    gray_crop = crop_fractional_roi(image, GRAY_CARD_ROI)
+                    gray_rgb = median_rgb(gray_crop)
+                    final_rgb = apply_gray_calibration(raw_rgb, gray_rgb)
+
+                feature_vector, hsv = build_feature_vector(final_rgb)
+
+                if is_real_model:
+                    label = predict_with_model(model, feature_vector)
+                    mode_name = "Mô hình ML"
+                else:
+                    label = predict_demo(final_rgb)
+                    mode_name = "DEMO — chưa phải model nghiên cứu"
+
+                render_result(
+                    label=label,
+                    rgb=final_rgb,
+                    hsv=hsv,
+                    calibrated=use_gray_card,
+                    mode_name=mode_name,
+                )
+
+                with st.expander("Xem chi tiết kỹ thuật"):
+                    st.write("RGB thô vùng thẻ:", raw_rgb)
+
+                    if gray_rgb is not None:
+                        st.write("RGB thẻ tham chiếu:", gray_rgb)
+                        st.write("RGB sau hiệu chỉnh:", final_rgb)
+
+                    st.write("Đặc trưng đưa vào model:", FEATURE_COLUMNS)
+                    st.write(
+                        {
+                            "R": int(final_rgb[0]),
+                            "G": int(final_rgb[1]),
+                            "B": int(final_rgb[2]),
+                            "H": float(hsv[0]),
+                            "S": float(hsv[1]),
+                            "V": float(hsv[2]),
+                        }
+                    )
+
+                    st.image(indicator_crop, caption="Vùng thẻ chỉ thị được phân tích")
+
+            except Exception as exc:
+                st.error(f"Không thể phân tích ảnh: {exc}")
+
+    else:
+        st.info("Chụp ảnh hoặc tải ảnh lên để bắt đầu.")
+
+    st.markdown(
+        """
+        <div class="disclaimer">
+            <strong>Lưu ý:</strong> Kết quả của ứng dụng là nhận định sàng lọc trong điều kiện
+            thí nghiệm của đề tài. Ứng dụng không xác nhận thực phẩm chắc chắn an toàn để ăn
+            và không thay thế kiểm nghiệm an toàn thực phẩm.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+with tab_explain:
+    st.markdown(
+        """
+        <div class="card">
+            <div class="section-kicker">Quy trình</div>
+            <div class="section-title">Ứng dụng phân loại như thế nào?</div>
+
+            <div class="flow">
+                <div class="flow-node">Ảnh smartphone</div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node">RGB / HSV của thẻ</div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node">Mô hình phân loại</div>
+            </div>
+
+            <div class="helper" style="margin-top:14px;">
+                Đầu ra chỉ gồm ba nhóm: <strong>Còn tươi</strong>,
+                <strong>Nên sử dụng sớm</strong> và
+                <strong>Có dấu hiệu hư hỏng</strong>.
+                Ứng dụng không chuyển kết quả thành “% độ tươi”.
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-kicker">Vùng ảnh</div>
+            <div class="section-title">Tại sao phải cố định vị trí thẻ?</div>
+            <div class="helper">
+                Nếu vị trí camera, ánh sáng và thẻ thay đổi giữa các lần chụp,
+                RGB có thể thay đổi dù mẫu không thay đổi. Vì vậy app chỉ đọc một
+                vùng cố định của thẻ và có thể dùng thẻ xám để giảm sai lệch màu.
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-kicker">Mô hình</div>
+            <div class="section-title">Khi có dữ liệu thí nghiệm thật</div>
+            <div class="helper">
+                Huấn luyện Decision Tree hoặc k-NN bằng dữ liệu của chính nhóm,
+                lưu model dưới tên <strong>model.joblib</strong>, rồi đặt file này
+                cùng thư mục với <strong>app.py</strong>. Ứng dụng sẽ tự ưu tiên
+                model thật thay cho chế độ demo.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
