@@ -1,11 +1,32 @@
 import colorsys
+import base64
+from io import BytesIO
 from pathlib import Path
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
 
 MODEL_PATH = Path("model.joblib")
 INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
+
+CAMERA_COMPONENT_DIR = Path(__file__).parent / "freshtag_camera"
+camera_component = components.declare_component(
+    "freshtag_native_camera",
+    path=str(CAMERA_COMPONENT_DIR),
+)
+
+def capture_camera(key="freshtag_camera"):
+    """Hiển thị camera live và trả về ảnh JPEG dạng data URL khi bấm shutter."""
+    return camera_component(key=key, default=None)
+
+def data_url_to_image(data_url: str) -> Image.Image:
+    if not isinstance(data_url, str) or "," not in data_url:
+        raise ValueError("Dữ liệu ảnh camera không hợp lệ.")
+    _, encoded = data_url.split(",", 1)
+    raw = base64.b64decode(encoded)
+    return Image.open(BytesIO(raw)).convert("RGB")
+
 
 DEMO_CENTROIDS = {
     "fresh": np.array([205.0, 95.0, 135.0]),
@@ -212,6 +233,40 @@ div[data-testid="stFileUploader"] button svg{
   }
 }
 
+
+.native-camera-hint{
+  max-width:560px;
+  margin:0 auto 10px;
+  text-align:center;
+  color:#a99cad;
+  font-size:.78rem;
+  line-height:1.45;
+}
+.capture-done{
+  max-width:560px;
+  margin:0 auto 12px;
+  padding:12px 14px;
+  border-radius:16px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.09);
+  text-align:center;
+  color:#c9becd;
+  font-size:.82rem;
+}
+div[data-testid="stButton"] > button{
+  min-height:46px!important;
+  border-radius:15px!important;
+  border:1px solid rgba(226,145,235,.42)!important;
+  background:rgba(255,255,255,.06)!important;
+  color:#fff!important;
+  font-weight:800!important;
+}
+div[data-testid="stButton"] > button:hover{
+  border-color:rgba(235,160,242,.72)!important;
+  background:rgba(151,73,164,.18)!important;
+  color:#fff!important;
+}
+
 .result-shell{position:relative;margin-top:18px;padding:1px;border-radius:29px;overflow:hidden;animation:resultIn .36s cubic-bezier(.2,.8,.2,1);}
 @keyframes resultIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:translateY(0) scale(1)}}
 .result-card{position:relative;z-index:1;border-radius:28px;padding:31px 25px 29px;text-align:center;backdrop-filter:blur(20px);box-shadow:0 26px 75px rgba(0,0,0,.30);}
@@ -359,66 +414,48 @@ mode = st.radio(
     label_visibility="collapsed",
 )
 
-# NOTE 11 — MOBILE CAPTURE
-# Không dùng st.camera_input() vì trên một số điện thoại luồng webcam/video
-# khiến người dùng phải pause rồi chọn frame. Thay vào đó dùng file input ảnh
-# của trình duyệt. Trên điện thoại, trình duyệt thường cho phép chọn Camera
-# để chụp ảnh tĩnh trực tiếp; trên desktop nó hoạt động như file picker.
-#
-# Đây là giải pháp không phụ thuộc component ngoài và giữ deploy Streamlit đơn giản.
-# Nếu sau này cần ép mở camera sau chỉ bằng 1 lần chạm trên mọi trình duyệt,
-# nên chuyển phần capture sang custom component HTML có:
-# <input type="file" accept="image/*" capture="environment">
+# Nếu đổi nguồn ảnh, xóa ảnh camera cũ để tránh dùng nhầm ảnh.
+if st.session_state.get("_last_mode") != mode:
+    st.session_state["_last_mode"] = mode
+    st.session_state.pop("camera_capture", None)
+
+image = None
 
 if mode == "📷 Chụp thẻ":
-    st.markdown(
-        _html("""
-        <div class="mobile-capture-note">
-          Trên điện thoại, chọn <b>Camera</b> khi bảng chọn ảnh mở ra để chụp thẻ trực tiếp.
-        </div>
-        """),
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        _html("""
-        <style>
-        div[data-testid="stFileUploader"] button{
-          font-size:0!important;
-        }
-        div[data-testid="stFileUploader"] button::after{
-          content:"MỞ CAMERA";
-          font-size:.88rem;
-          letter-spacing:.035em;
-          color:#fff;
-        }
-        </style>
-        """),
-        unsafe_allow_html=True,
-    )
-    image_file = st.file_uploader(
-        "Chụp thẻ",
-        type=["jpg", "jpeg", "png", "webp"],
-        accept_multiple_files=False,
-        label_visibility="collapsed",
-        key="capture_photo",
-    )
+    if "camera_capture" not in st.session_state:
+        st.markdown(
+            _html("""
+            <div class="native-camera-hint">
+              Cho phép quyền camera khi trình duyệt hỏi. FreshTag ưu tiên camera sau của điện thoại.
+            </div>
+            """),
+            unsafe_allow_html=True,
+        )
+
+        captured_data = capture_camera(key="freshtag_live_camera")
+
+        if captured_data:
+            st.session_state["camera_capture"] = captured_data
+            st.rerun()
+    else:
+        try:
+            image = data_url_to_image(st.session_state["camera_capture"])
+            st.markdown(
+                _html("""
+                <div class="capture-done">
+                  Đã chụp thẻ · FreshTag đang dùng ảnh này để phân tích
+                </div>
+                """),
+                unsafe_allow_html=True,
+            )
+            if st.button("↻ Chụp lại", use_container_width=True):
+                st.session_state.pop("camera_capture", None)
+                st.rerun()
+        except Exception:
+            st.session_state.pop("camera_capture", None)
+            st.error("Không thể đọc ảnh vừa chụp. Vui lòng thử lại.")
+
 else:
-    st.markdown(
-        _html("""
-        <style>
-        div[data-testid="stFileUploader"] button{
-          font-size:0!important;
-        }
-        div[data-testid="stFileUploader"] button::after{
-          content:"CHỌN ẢNH";
-          font-size:.88rem;
-          letter-spacing:.035em;
-          color:#fff;
-        }
-        </style>
-        """),
-        unsafe_allow_html=True,
-    )
     image_file = st.file_uploader(
         "Chọn ảnh",
         type=["jpg", "jpeg", "png", "webp"],
@@ -426,15 +463,19 @@ else:
         label_visibility="collapsed",
         key="library_photo",
     )
+    if image_file is not None:
+        try:
+            image = Image.open(image_file).convert("RGB")
+        except Exception:
+            st.error("Không thể đọc ảnh. Vui lòng chọn ảnh khác.")
 
-if image_file is not None:
+if image is not None:
     try:
-        image = Image.open(image_file).convert("RGB")
         label = analyze(image)
         apply_result_environment(label)
         show_result(label)
     except Exception:
-        st.error("Không thể đọc ảnh. Vui lòng chụp lại hoặc chọn ảnh khác.")
+        st.error("Không thể phân tích ảnh. Vui lòng chụp lại hoặc chọn ảnh khác.")
 
 st.markdown(_html("""
 <div class="note">
