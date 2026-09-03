@@ -12,13 +12,15 @@ INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
 
 CAMERA_COMPONENT_DIR = Path(__file__).parent / "freshtag_camera"
 camera_component = components.declare_component(
-    "freshtag_native_camera_v8",
+    "freshtag_native_camera_v10",
     path=str(CAMERA_COMPONENT_DIR),
 )
 
+PUBLIC_APP_URL = "https://smart-tag-freshness-9upgtxr2ipvvjozmqmqq3q.streamlit.app/"
+
 def capture_camera(key="freshtag_camera"):
-    """Hiển thị camera live và trả về ảnh JPEG dạng data URL khi bấm shutter."""
-    return camera_component(key=key, default=None)
+    """Hiển thị camera live; trong Zalo/in-app browser sẽ yêu cầu mở bằng trình duyệt ngoài."""
+    return camera_component(key=key, default=None, app_url=PUBLIC_APP_URL)
 
 def data_url_to_image(data_url: str) -> Image.Image:
     if not isinstance(data_url, str) or "," not in data_url:
