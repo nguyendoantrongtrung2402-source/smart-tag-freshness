@@ -5,6 +5,11 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
+
+def _html(s: str) -> str:
+    """Remove leading indentation so Streamlit Markdown does not render HTML as code."""
+    return "\n".join(line.strip() for line in s.strip().split("\n"))
+
 # ============================================================
 # FreshTag — UI consumer-first
 # Flow:
@@ -60,7 +65,7 @@ st.set_page_config(
 )
 
 st.markdown(
-    """
+    _html("""
     <style>
     :root{
         --ink:#24162c;
@@ -369,7 +374,7 @@ st.markdown(
         }
     }
     </style>
-    """,
+    """),
     unsafe_allow_html=True,
 )
 
@@ -480,7 +485,7 @@ def show_result(label):
 # UI
 # ------------------------------------------------------------
 st.markdown(
-    """
+    _html("""
     <div class="hero">
         <div class="brand-row">
             <div class="brand-icon">🍃</div>
@@ -503,7 +508,7 @@ st.markdown(
         <div class="action-title">Kiểm tra ngay</div>
         <div class="action-sub">Chụp thẻ chỉ thị hoặc chọn ảnh có sẵn</div>
     </div>
-    """,
+    """),
     unsafe_allow_html=True,
 )
 
@@ -537,10 +542,10 @@ if image_file is not None:
         st.error("Không thể đọc ảnh. Vui lòng chụp lại hoặc chọn ảnh khác.")
 
 st.markdown(
-    """
+    _html("""
     <div class="note">
         Kết quả mang tính hỗ trợ nhận định và không thay thế kiểm nghiệm an toàn thực phẩm.
     </div>
-    """,
+    """),
     unsafe_allow_html=True,
 )
