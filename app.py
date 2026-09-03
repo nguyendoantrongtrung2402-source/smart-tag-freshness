@@ -1,23 +1,12 @@
 import colorsys
 from pathlib import Path
-
 import numpy as np
 import streamlit as st
 from PIL import Image
 
-# ============================================================
-# FreshTag — Cinematic UI
-# Flow duy nhất: Chụp / tải ảnh -> tự phân tích -> hiện kết quả
-#
-# Khi có model thật, đặt "model.joblib" cùng thư mục app.py.
-# ============================================================
-
 MODEL_PATH = Path("model.joblib")
-
-# ROI tạm thời. Sau khi chốt hộp chụp/camera, chỉnh lại đúng vị trí thẻ.
 INDICATOR_ROI = (0.35, 0.35, 0.65, 0.65)
 
-# Demo centroids chỉ để app chạy trước khi có model thật.
 DEMO_CENTROIDS = {
     "fresh": np.array([205.0, 95.0, 135.0]),
     "transition": np.array([145.0, 110.0, 165.0]),
@@ -25,584 +14,216 @@ DEMO_CENTROIDS = {
 }
 
 RESULTS = {
-    "fresh": {
-        "title": "CÒN TƯƠI",
-        "message": "Thực phẩm đang ở trạng thái còn tươi.",
-        "class": "fresh",
-        "symbol": "✓",
-    },
-    "transition": {
-        "title": "NÊN SỬ DỤNG SỚM",
-        "message": "Thực phẩm đang chuyển trạng thái. Nên ưu tiên sử dụng sớm.",
-        "class": "warning",
-        "symbol": "!",
-    },
-    "spoiled": {
-        "title": "CÓ DẤU HIỆU HƯ HỎNG",
-        "message": "Thực phẩm có dấu hiệu hư hỏng. Không nên sử dụng.",
-        "class": "danger",
-        "symbol": "!",
-    },
+    "fresh": {"title": "CÒN TƯƠI", "message": "Thực phẩm đang ở trạng thái còn tươi.", "class": "fresh", "symbol": "✓"},
+    "transition": {"title": "NÊN SỬ DỤNG SỚM", "message": "Thực phẩm đang chuyển trạng thái. Nên ưu tiên sử dụng sớm.", "class": "warning", "symbol": "!"},
+    "spoiled": {"title": "CÓ DẤU HIỆU HƯ HỎNG", "message": "Thực phẩm có dấu hiệu hư hỏng. Không nên sử dụng.", "class": "danger", "symbol": "!"},
 }
-
 
 def _html(s: str) -> str:
     return "\n".join(line.strip() for line in s.strip().split("\n"))
 
+PERILLA_CLUSTER_SVG = r"""
+<svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M188 151 C167 130 147 112 126 99 L111 90 L119 82 L100 78 L109 69 L88 62 L102 53 L84 44 L105 41 L96 28 L119 31 L116 17 L140 27 L145 11 L164 29 L173 18 L181 41 C190 72 196 110 188 151 Z" stroke-width="5"/>
+    <path d="M181 41 C164 55 151 70 139 88 C128 104 117 120 106 139" stroke-width="3"/>
+    <path d="M173 55 L151 50 M166 66 L141 64 M157 79 L131 78 M148 92 L122 93 M139 106 L115 110" stroke-width="2.5"/>
+    <path d="M159 61 L171 84 M148 72 L161 96 M137 86 L150 111 M126 99 L138 124" stroke-width="2.4"/>
 
-# ------------------------------------------------------------
-# PAGE
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title="FreshTag",
-    page_icon="🟣",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
+    <path d="M181 151 C155 160 133 174 115 192 L102 205 L88 201 L89 216 L71 216 L76 230 L57 235 L68 246 L49 256 L65 264 L49 279 L72 277 L67 292 L91 283 L94 297 L116 282 L124 293 L143 271 C167 239 181 201 181 151 Z" stroke-width="5"/>
+    <path d="M181 151 C154 180 132 208 111 237 C98 255 87 270 73 284" stroke-width="3"/>
+    <path d="M165 176 L140 173 M154 191 L128 189 M143 207 L116 206 M132 223 L106 224 M121 240 L95 244 M109 256 L86 262" stroke-width="2.5"/>
+    <path d="M151 182 L163 204 M139 198 L151 220 M126 215 L138 237 M114 232 L125 252 M101 249 L111 267" stroke-width="2.4"/>
 
-# ------------------------------------------------------------
-# BASE CSS — cinematic dark plum
-# ------------------------------------------------------------
-st.markdown(
-    _html(r"""
-    <style>
-    :root{
-        --bg0:#09070d;
-        --bg1:#120b18;
-        --bg2:#1b1024;
-        --ink:#f8f4fb;
-        --muted:#b8aebe;
-        --purple:#a860d1;
-        --purple2:#7f3fa7;
-        --magenta:#c65c9f;
-        --line:rgba(255,255,255,.10);
-        --glass:rgba(255,255,255,.055);
-    }
+    <path d="M188 151 C217 142 244 141 267 150 L282 157 L291 148 L298 163 L313 159 L311 175 L327 179 L318 191 L332 201 L319 211 L328 226 L310 229 L312 245 L293 242 L290 258 L271 249 L263 263 L246 247 L235 258 L222 235 C206 208 195 181 188 151 Z" stroke-width="5"/>
+    <path d="M188 151 C216 168 238 187 258 208 C274 225 287 241 300 254" stroke-width="3"/>
+    <path d="M208 161 L230 153 M219 172 L244 164 M231 183 L257 175 M243 195 L270 187 M255 207 L281 200 M267 220 L291 215" stroke-width="2.5"/>
+    <path d="M218 166 L207 190 M231 177 L220 201 M244 189 L233 213 M257 202 L246 225 M270 214 L259 237" stroke-width="2.4"/>
 
-    html, body, [class*="css"]{
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system,
-        BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+    <path d="M188 151 C214 133 239 111 261 88 C278 69 293 51 308 34" stroke-width="7"/>
+  </g>
+</svg>
+"""
 
-    body{
-        background:#09070d;
-    }
+PERILLA_LOGO_SVG = r"""
+<svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <g stroke="#2a0f2e" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M188 151 C167 130 147 112 126 99 L111 90 L119 82 L100 78 L109 69 L88 62 L102 53 L84 44 L105 41 L96 28 L119 31 L116 17 L140 27 L145 11 L164 29 L173 18 L181 41 C190 72 196 110 188 151 Z" fill="#a251ae" stroke-width="4"/>
+    <path d="M181 151 C155 160 133 174 115 192 L102 205 L88 201 L89 216 L71 216 L76 230 L57 235 L68 246 L49 256 L65 264 L49 279 L72 277 L67 292 L91 283 L94 297 L116 282 L124 293 L143 271 C167 239 181 201 181 151 Z" fill="#8f439c" stroke-width="4"/>
+    <path d="M188 151 C217 142 244 141 267 150 L282 157 L291 148 L298 163 L313 159 L311 175 L327 179 L318 191 L332 201 L319 211 L328 226 L310 229 L312 245 L293 242 L290 258 L271 249 L263 263 L246 247 L235 258 L222 235 C206 208 195 181 188 151 Z" fill="#aa54b5" stroke-width="4"/>
+    <g fill="none" stroke="#421943">
+      <path d="M181 41 C164 55 151 70 139 88 C128 104 117 120 106 139" stroke-width="3"/>
+      <path d="M181 151 C154 180 132 208 111 237 C98 255 87 270 73 284" stroke-width="3"/>
+      <path d="M188 151 C216 168 238 187 258 208 C274 225 287 241 300 254" stroke-width="3"/>
+      <path d="M159 61 L171 84 M148 72 L161 96 M137 86 L150 111 M126 99 L138 124" stroke-width="2"/>
+      <path d="M151 182 L163 204 M139 198 L151 220 M126 215 L138 237 M114 232 L125 252" stroke-width="2"/>
+      <path d="M218 166 L207 190 M231 177 L220 201 M244 189 L233 213 M257 202 L246 225" stroke-width="2"/>
+    </g>
+    <path d="M188 151 C214 133 239 111 261 88 C278 69 293 51 308 34" fill="none" stroke="#4b1d43" stroke-width="7"/>
+  </g>
+</svg>
+"""
 
-    .stApp{
-        color:var(--ink);
-        background:
-            radial-gradient(circle at 14% 4%, rgba(155,76,194,.18), transparent 28%),
-            radial-gradient(circle at 88% 12%, rgba(190,64,137,.12), transparent 26%),
-            radial-gradient(circle at 68% 92%, rgba(92,40,123,.13), transparent 30%),
-            linear-gradient(145deg,var(--bg0) 0%,var(--bg1) 48%,#0c0811 100%);
-        min-height:100vh;
-        transition:background .55s ease;
-    }
+st.set_page_config(page_title="FreshTag", page_icon="🟣", layout="centered", initial_sidebar_state="collapsed")
 
-    #MainMenu, header, footer{
-        visibility:hidden;
-    }
+st.markdown(_html(r"""
+<style>
+:root{
+  --ink:#f7f3f8; --muted:#b0a3b4; --plum:#8f47a0;
+}
+html,body,[class*="css"]{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+body{background:#08060b;}
+.stApp{
+  color:var(--ink);
+  background:
+    radial-gradient(circle at 16% 5%,rgba(137,66,160,.16),transparent 29%),
+    radial-gradient(circle at 85% 12%,rgba(165,54,124,.11),transparent 25%),
+    radial-gradient(circle at 70% 90%,rgba(88,39,109,.10),transparent 31%),
+    linear-gradient(145deg,#08060b 0%,#100913 48%,#09070c 100%);
+  min-height:100vh; transition:background .5s ease;
+}
+#MainMenu,header,footer{visibility:hidden;}
+.block-container{max-width:760px;padding-top:1rem;padding-bottom:2.35rem;position:relative;z-index:2;}
 
-    .block-container{
-        max-width:760px;
-        padding-top:1.15rem;
-        padding-bottom:2.4rem;
-        position:relative;
-        z-index:2;
-    }
+.botanical-layer{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.perilla-bg{position:absolute;width:420px;color:#ae6bb8;opacity:.055;filter:drop-shadow(0 0 30px rgba(169,78,179,.10));transition:.5s ease;}
+.perilla-bg.left{left:-130px;top:115px;transform:rotate(-10deg);}
+.perilla-bg.right{right:-145px;bottom:-5px;transform:rotate(168deg) scale(.94);}
 
-    /* =======================================================
-       BACKGROUND PERILLA LINE ART
-       ======================================================= */
-    .botanical-layer{
-        position:fixed;
-        inset:0;
-        z-index:0;
-        pointer-events:none;
-        overflow:hidden;
-    }
+.hero{
+  position:relative;overflow:hidden;border-radius:30px;padding:29px 31px 28px;margin-bottom:18px;
+  background:
+    radial-gradient(circle at 82% 5%,rgba(255,255,255,.08),transparent 20%),
+    radial-gradient(circle at 20% 100%,rgba(194,70,145,.12),transparent 28%),
+    linear-gradient(135deg,rgba(78,31,99,.82),rgba(45,18,57,.92) 50%,rgba(62,19,56,.87));
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 28px 80px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.075);
+  backdrop-filter:blur(18px);
+}
+.hero:after{content:"";position:absolute;width:280px;height:280px;right:-110px;top:-145px;border-radius:50%;background:radial-gradient(circle,rgba(202,98,192,.17),transparent 66%);}
+.brand-row{position:relative;z-index:1;display:flex;align-items:center;gap:14px;}
+.brand-mark{
+  width:70px;height:70px;display:grid;place-items:center;border-radius:20px;padding:7px;
+  background:linear-gradient(145deg,rgba(175,85,183,.28),rgba(100,41,119,.18));
+  border:1px solid rgba(255,255,255,.13);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 34px rgba(0,0,0,.23);
+}
+.brand-mark svg{width:100%;height:100%;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18));}
+.brand-name{font-size:1.88rem;font-weight:920;letter-spacing:-.055em;line-height:1;}
+.brand-mini{margin-top:6px;font-size:.70rem;font-weight:750;letter-spacing:.18em;color:rgba(255,255,255,.53);text-transform:uppercase;}
+.hero-copy{position:relative;z-index:1;margin-top:28px;max-width:550px;}
+.hero-kicker{display:inline-flex;padding:6px 10px;border-radius:999px;margin-bottom:12px;font-size:.66rem;font-weight:850;letter-spacing:.12em;color:#dfcde5;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);text-transform:uppercase;}
+.hero-title{margin:0;max-width:550px;font-size:2.18rem;line-height:1.04;font-weight:930;letter-spacing:-.058em;}
+.hero-sub{max-width:470px;margin-top:12px;font-size:.93rem;line-height:1.57;color:rgba(255,255,255,.63);}
 
-    .leaf-art{
-        position:absolute;
-        width:360px;
-        height:360px;
-        opacity:.075;
-        filter:drop-shadow(0 0 20px rgba(180,92,210,.14));
-    }
+.action-head{text-align:center;margin:18px 0 12px;}
+.action-title{font-size:1.12rem;font-weight:850;letter-spacing:-.025em;}
+.action-sub{margin-top:4px;color:#9d90a1;font-size:.84rem;}
 
-    .leaf-art.left{
-        left:-105px;
-        top:110px;
-        transform:rotate(-18deg);
-    }
+div[role="radiogroup"]{
+  width:fit-content;margin:0 auto 13px;padding:6px 8px;border-radius:17px;
+  background:rgba(255,255,255,.09)!important;border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 14px 36px rgba(0,0,0,.18);backdrop-filter:blur(16px);
+}
+div[role="radiogroup"] label,
+div[role="radiogroup"] label p,
+div[role="radiogroup"] [data-testid="stMarkdownContainer"]{
+  color:#fff!important;opacity:1!important;font-weight:750!important;
+}
 
-    .leaf-art.right{
-        right:-115px;
-        bottom:30px;
-        transform:rotate(168deg) scale(.92);
-    }
+div[data-testid="stCameraInput"],div[data-testid="stFileUploader"]{
+  overflow:hidden;padding:8px;border-radius:26px;background:rgba(255,255,255,.065);
+  border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 28px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045);
+  backdrop-filter:blur(18px);
+}
+div[data-testid="stCameraInput"] video{max-height:420px!important;object-fit:cover!important;border-radius:20px!important;background:#030204!important;}
 
-    .leaf-line{
-        fill:none;
-        stroke:#d6a3ee;
-        stroke-width:2.2;
-        stroke-linecap:round;
-        stroke-linejoin:round;
-    }
+div[data-testid="stCameraInput"] button{
+  min-height:48px!important;border-radius:15px!important;
+  border:1px solid rgba(235,159,242,.55)!important;
+  background:linear-gradient(135deg,#934aaf,#bd4f96)!important;
+  color:#fff!important;font-weight:900!important;opacity:1!important;
+  box-shadow:0 9px 28px rgba(148,53,164,.26)!important;
+}
+div[data-testid="stCameraInput"] button:hover{
+  filter:brightness(1.12)!important;transform:translateY(-1px);
+}
+div[data-testid="stCameraInput"] button *,
+div[data-testid="stCameraInput"] button svg{color:#fff!important;fill:#fff!important;opacity:1!important;}
 
-    /* =======================================================
-       HERO
-       ======================================================= */
-    .hero{
-        position:relative;
-        overflow:hidden;
-        border-radius:30px;
-        padding:30px 32px 29px;
-        margin-bottom:18px;
-        background:
-            radial-gradient(circle at 82% 8%, rgba(255,255,255,.10), transparent 21%),
-            radial-gradient(circle at 16% 96%, rgba(208,91,167,.13), transparent 27%),
-            linear-gradient(135deg, rgba(86,38,113,.78), rgba(48,22,66,.88) 48%, rgba(76,25,68,.80));
-        border:1px solid rgba(255,255,255,.10);
-        box-shadow:
-            0 24px 70px rgba(0,0,0,.35),
-            inset 0 1px 0 rgba(255,255,255,.08);
-        backdrop-filter:blur(16px);
-    }
+div[data-testid="stCameraInput"] [data-testid="baseButton-secondary"]{
+  background:linear-gradient(135deg,#6c1d31,#8f273e)!important;
+  border:1px solid rgba(255,107,128,.68)!important;
+  color:#ffe4e8!important;
+}
+div[data-testid="stCameraInput"] [data-testid="baseButton-secondary"] *{color:#ffe4e8!important;fill:#ffe4e8!important;}
 
-    .hero:before{
-        content:"";
-        position:absolute;
-        inset:-1px;
-        border-radius:30px;
-        padding:1px;
-        background:linear-gradient(130deg,rgba(225,163,255,.35),rgba(255,255,255,.02),rgba(220,95,163,.22));
-        -webkit-mask:
-            linear-gradient(#fff 0 0) content-box,
-            linear-gradient(#fff 0 0);
-        -webkit-mask-composite:xor;
-        mask-composite:exclude;
-        pointer-events:none;
-    }
+div[data-testid="stFileUploader"] button{
+  border-radius:14px!important;border:1px solid rgba(226,145,235,.48)!important;
+  background:linear-gradient(135deg,#80409a,#a4478d)!important;
+  color:#fff!important;font-weight:850!important;opacity:1!important;
+}
+div[data-testid="stFileUploader"] button *{color:#fff!important;fill:#fff!important;}
 
-    .hero-orb{
-        position:absolute;
-        right:-70px;
-        top:-90px;
-        width:230px;
-        height:230px;
-        border-radius:50%;
-        background:radial-gradient(circle,rgba(202,105,224,.22),rgba(202,105,224,0) 68%);
-        filter:blur(2px);
-    }
+.result-shell{position:relative;margin-top:18px;padding:1px;border-radius:29px;overflow:hidden;animation:resultIn .36s cubic-bezier(.2,.8,.2,1);}
+@keyframes resultIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:translateY(0) scale(1)}}
+.result-card{position:relative;z-index:1;border-radius:28px;padding:31px 25px 29px;text-align:center;backdrop-filter:blur(20px);box-shadow:0 26px 75px rgba(0,0,0,.30);}
+.status-mark{width:80px;height:80px;margin:0 auto 16px;display:grid;place-items:center;border-radius:25px;font-size:39px;font-weight:930;line-height:1;}
+.status-caption{margin-bottom:7px;font-size:.67rem;font-weight:850;letter-spacing:.18em;text-transform:uppercase;opacity:.58;}
+.status-title{font-size:1.64rem;line-height:1.12;font-weight:930;letter-spacing:-.04em;}
+.status-message{max-width:430px;margin:10px auto 0;font-size:.92rem;line-height:1.58;opacity:.75;}
 
-    .brand-row{
-        display:flex;
-        align-items:center;
-        gap:13px;
-        position:relative;
-        z-index:1;
-    }
+.result-shell.fresh{background:linear-gradient(135deg,rgba(60,218,135,.76),rgba(76,126,105,.22));box-shadow:0 0 60px rgba(44,199,118,.16);}
+.fresh .result-card{background:radial-gradient(circle at 50% -10%,rgba(43,180,106,.14),transparent 34%),linear-gradient(155deg,rgba(8,30,22,.98),rgba(8,17,16,.97));border:1px solid rgba(91,229,157,.17);}
+.fresh .status-mark{color:#72edb0;background:rgba(62,214,139,.12);border:1px solid rgba(103,233,169,.23);box-shadow:0 0 40px rgba(50,205,130,.15);}
+.fresh .status-title{color:#82efba;}
 
-    .brand-mark{
-        width:52px;
-        height:52px;
-        display:grid;
-        place-items:center;
-        border-radius:16px;
-        background:linear-gradient(145deg,rgba(188,101,215,.28),rgba(123,61,160,.16));
-        border:1px solid rgba(236,194,255,.20);
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,.10),
-            0 10px 30px rgba(0,0,0,.22);
-    }
+.result-shell.warning{background:linear-gradient(135deg,rgba(255,179,63,.88),rgba(142,83,27,.36));box-shadow:0 0 66px rgba(255,159,40,.20);}
+.warning .result-card{background:radial-gradient(circle at 50% -10%,rgba(225,143,35,.17),transparent 34%),linear-gradient(155deg,rgba(42,28,9,.98),rgba(20,15,9,.97));border:1px solid rgba(255,196,91,.19);}
+.warning .status-mark{color:#ffc45f;background:rgba(255,175,54,.13);border:1px solid rgba(255,195,92,.26);box-shadow:0 0 42px rgba(255,165,43,.18);}
+.warning .status-title{color:#ffd178;}
 
-    .brand-mark svg{
-        width:33px;
-        height:33px;
-    }
+.result-shell.danger{background:linear-gradient(135deg,rgba(255,64,82,.95),rgba(120,18,40,.62));box-shadow:0 0 85px rgba(255,36,65,.30),0 28px 85px rgba(0,0,0,.40);}
+.danger .result-card{background:radial-gradient(circle at 50% -12%,rgba(218,29,61,.24),transparent 37%),linear-gradient(155deg,rgba(48,7,15,.99),rgba(17,5,9,.985));border:1px solid rgba(255,87,104,.25);}
+.danger .status-mark{color:#ff6a78;background:rgba(255,55,78,.14);border:1px solid rgba(255,100,118,.32);box-shadow:0 0 52px rgba(255,42,67,.28),inset 0 0 26px rgba(255,67,86,.06);}
+.danger .status-title{color:#ff7a87;text-shadow:0 0 26px rgba(255,55,76,.18);}
 
-    .brand-name{
-        font-size:1.82rem;
-        font-weight:900;
-        letter-spacing:-.055em;
-        line-height:1;
-    }
+.note{max-width:540px;margin:15px auto 0;text-align:center;color:#756a79;font-size:.68rem;line-height:1.45;}
 
-    .brand-mini{
-        margin-top:5px;
-        font-size:.71rem;
-        font-weight:700;
-        letter-spacing:.16em;
-        color:rgba(255,255,255,.55);
-        text-transform:uppercase;
-    }
+@media(max-width:620px){
+  .block-container{padding-top:.62rem;padding-left:.85rem;padding-right:.85rem;}
+  .hero{padding:22px 20px 22px;border-radius:25px;}
+  .brand-mark{width:62px;height:62px;border-radius:18px;}
+  .brand-name{font-size:1.62rem}.hero-title{font-size:1.73rem}.hero-sub{font-size:.88rem}
+  .perilla-bg{width:290px;opacity:.043}.perilla-bg.left{left:-110px;top:180px}.perilla-bg.right{right:-115px;bottom:55px}
+  .result-card{padding:27px 17px 24px}.status-title{font-size:1.4rem}
+  div[role="radiogroup"]{width:100%}
+}
+</style>
+"""), unsafe_allow_html=True)
 
-    .hero-copy{
-        position:relative;
-        z-index:1;
-        margin-top:29px;
-        max-width:540px;
-    }
+st.markdown(_html(f"""
+<div class="botanical-layer" aria-hidden="true">
+  <div class="perilla-bg left">{PERILLA_CLUSTER_SVG}</div>
+  <div class="perilla-bg right">{PERILLA_CLUSTER_SVG}</div>
+</div>
+"""), unsafe_allow_html=True)
 
-    .hero-kicker{
-        display:inline-flex;
-        align-items:center;
-        gap:7px;
-        padding:6px 9px;
-        border-radius:999px;
-        font-size:.66rem;
-        font-weight:800;
-        letter-spacing:.11em;
-        text-transform:uppercase;
-        color:#dbc8e3;
-        background:rgba(255,255,255,.055);
-        border:1px solid rgba(255,255,255,.08);
-        margin-bottom:12px;
-    }
-
-    .hero-title{
-        font-size:2.15rem;
-        line-height:1.04;
-        font-weight:920;
-        letter-spacing:-.055em;
-        margin:0;
-        max-width:530px;
-    }
-
-    .hero-sub{
-        margin-top:12px;
-        color:rgba(255,255,255,.64);
-        font-size:.94rem;
-        line-height:1.58;
-        max-width:470px;
-    }
-
-    /* =======================================================
-       ACTION / INPUT
-       ======================================================= */
-    .action-head{
-        text-align:center;
-        margin:18px 0 12px;
-    }
-
-    .action-title{
-        font-size:1.1rem;
-        font-weight:850;
-        letter-spacing:-.025em;
-    }
-
-    .action-sub{
-        margin-top:4px;
-        color:#9f93a5;
-        font-size:.84rem;
-    }
-
-    div[role="radiogroup"]{
-        width:fit-content;
-        margin:0 auto 13px auto;
-        padding:5px 7px;
-        border-radius:16px;
-        background:rgba(255,255,255,.045);
-        border:1px solid rgba(255,255,255,.08);
-        box-shadow:0 12px 32px rgba(0,0,0,.16);
-        backdrop-filter:blur(16px);
-    }
-
-    div[role="radiogroup"] label{
-        color:#ddd3e1 !important;
-    }
-
-    div[data-testid="stCameraInput"],
-    div[data-testid="stFileUploader"]{
-        background:rgba(255,255,255,.055);
-        border:1px solid rgba(255,255,255,.09);
-        border-radius:26px;
-        padding:8px;
-        overflow:hidden;
-        box-shadow:
-            0 24px 60px rgba(0,0,0,.24),
-            inset 0 1px 0 rgba(255,255,255,.04);
-        backdrop-filter:blur(18px);
-    }
-
-    div[data-testid="stCameraInput"] video{
-        border-radius:20px !important;
-        max-height:420px !important;
-        object-fit:cover !important;
-        background:#050407 !important;
-    }
-
-    div[data-testid="stCameraInput"] button,
-    div[data-testid="stFileUploader"] button{
-        border-radius:14px !important;
-        font-weight:800 !important;
-    }
-
-    /* =======================================================
-       RESULT — default dark glass
-       ======================================================= */
-    .result-shell{
-        position:relative;
-        margin-top:18px;
-        padding:1px;
-        border-radius:29px;
-        overflow:hidden;
-        animation:resultIn .38s cubic-bezier(.2,.8,.2,1);
-    }
-
-    @keyframes resultIn{
-        from{opacity:0; transform:translateY(8px) scale(.992);}
-        to{opacity:1; transform:translateY(0) scale(1);}
-    }
-
-    .result-card{
-        position:relative;
-        z-index:1;
-        border-radius:28px;
-        padding:30px 25px 28px;
-        text-align:center;
-        backdrop-filter:blur(20px);
-        box-shadow:0 24px 70px rgba(0,0,0,.30);
-    }
-
-    .status-mark{
-        width:78px;
-        height:78px;
-        margin:0 auto 16px;
-        display:grid;
-        place-items:center;
-        border-radius:24px;
-        font-size:38px;
-        line-height:1;
-        font-weight:900;
-    }
-
-    .status-caption{
-        font-size:.67rem;
-        font-weight:850;
-        letter-spacing:.18em;
-        text-transform:uppercase;
-        opacity:.58;
-        margin-bottom:7px;
-    }
-
-    .status-title{
-        font-size:1.62rem;
-        line-height:1.13;
-        font-weight:930;
-        letter-spacing:-.04em;
-    }
-
-    .status-message{
-        max-width:430px;
-        margin:10px auto 0;
-        font-size:.92rem;
-        line-height:1.58;
-        opacity:.72;
-    }
-
-    /* Fresh */
-    .result-shell.fresh{
-        background:linear-gradient(135deg,rgba(73,220,145,.62),rgba(116,76,166,.22));
-        box-shadow:0 0 54px rgba(47,194,117,.14);
-    }
-    .fresh .result-card{
-        background:linear-gradient(155deg,rgba(11,34,26,.95),rgba(12,20,21,.93));
-        border:1px solid rgba(95,232,161,.14);
-    }
-    .fresh .status-mark{
-        color:#66e6a5;
-        background:rgba(70,213,139,.11);
-        border:1px solid rgba(100,232,169,.20);
-        box-shadow:0 0 34px rgba(61,207,132,.12);
-    }
-    .fresh .status-title{color:#7cedb4;}
-
-    /* Warning */
-    .result-shell.warning{
-        background:linear-gradient(135deg,rgba(255,181,74,.70),rgba(175,95,63,.28));
-        box-shadow:0 0 60px rgba(255,167,54,.17);
-    }
-    .warning .result-card{
-        background:linear-gradient(155deg,rgba(41,28,12,.96),rgba(22,17,13,.94));
-        border:1px solid rgba(255,194,95,.16);
-    }
-    .warning .status-mark{
-        color:#ffc25c;
-        background:rgba(255,176,55,.11);
-        border:1px solid rgba(255,194,95,.22);
-        box-shadow:0 0 34px rgba(255,173,54,.14);
-    }
-    .warning .status-title{color:#ffd078;}
-
-    /* Danger */
-    .result-shell.danger{
-        background:linear-gradient(135deg,rgba(255,77,92,.90),rgba(136,27,50,.50));
-        box-shadow:
-            0 0 72px rgba(255,47,75,.24),
-            0 26px 80px rgba(0,0,0,.38);
-    }
-    .danger .result-card{
-        background:
-            radial-gradient(circle at 50% -10%,rgba(193,42,65,.20),transparent 34%),
-            linear-gradient(155deg,rgba(41,9,16,.98),rgba(19,7,11,.97));
-        border:1px solid rgba(255,96,110,.20);
-    }
-    .danger .status-mark{
-        color:#ff6976;
-        background:rgba(255,75,91,.12);
-        border:1px solid rgba(255,104,118,.26);
-        box-shadow:
-            0 0 42px rgba(255,60,80,.22),
-            inset 0 0 24px rgba(255,71,87,.05);
-    }
-    .danger .status-title{
-        color:#ff7d88;
-        text-shadow:0 0 22px rgba(255,71,91,.13);
-    }
-
-    .note{
-        text-align:center;
-        max-width:540px;
-        margin:15px auto 0;
-        color:#776c7d;
-        font-size:.68rem;
-        line-height:1.45;
-    }
-
-    /* =======================================================
-       RESPONSIVE
-       ======================================================= */
-    @media (max-width: 620px){
-        .block-container{
-            padding-top:.65rem;
-            padding-left:.85rem;
-            padding-right:.85rem;
-        }
-
-        .hero{
-            border-radius:25px;
-            padding:23px 20px 23px;
-        }
-
-        .hero-title{
-            font-size:1.73rem;
-        }
-
-        .hero-sub{
-            font-size:.88rem;
-        }
-
-        .brand-mark{
-            width:47px;
-            height:47px;
-            border-radius:15px;
-        }
-
-        .brand-mark svg{
-            width:30px;
-            height:30px;
-        }
-
-        .brand-name{
-            font-size:1.58rem;
-        }
-
-        .leaf-art{
-            width:260px;
-            height:260px;
-            opacity:.052;
-        }
-
-        .leaf-art.left{
-            left:-105px;
-            top:165px;
-        }
-
-        .leaf-art.right{
-            right:-100px;
-            bottom:60px;
-        }
-
-        .result-card{
-            padding:26px 17px 24px;
-        }
-
-        .status-title{
-            font-size:1.38rem;
-        }
-
-        div[role="radiogroup"]{
-            width:100%;
-        }
-    }
-    </style>
-    """),
-    unsafe_allow_html=True,
-)
-
-# ------------------------------------------------------------
-# BOTANICAL BACKGROUND — perilla-inspired leaf line art
-# ------------------------------------------------------------
-st.markdown(
-    _html("""
-    <div class="botanical-layer" aria-hidden="true">
-        <svg class="leaf-art left" viewBox="0 0 320 320">
-            <path class="leaf-line" d="M164 285 C147 240 130 198 124 159 C116 111 131 69 169 38 C204 72 224 113 217 154 C211 193 187 239 164 285 Z"/>
-            <path class="leaf-line" d="M164 285 C165 240 164 194 166 147 C168 105 169 70 169 38"/>
-            <path class="leaf-line" d="M164 230 C139 215 121 198 105 178"/>
-            <path class="leaf-line" d="M165 208 C192 192 208 175 225 153"/>
-            <path class="leaf-line" d="M164 178 C141 162 124 146 111 129"/>
-            <path class="leaf-line" d="M166 155 C188 140 205 121 216 102"/>
-            <path class="leaf-line" d="M165 127 C144 112 132 98 124 85"/>
-            <path class="leaf-line" d="M167 105 C185 91 197 77 204 65"/>
-            <path class="leaf-line" d="M124 159 C111 151 102 141 97 130 C108 126 115 121 119 111 C107 105 101 96 101 87 C115 87 124 83 130 74 C119 67 116 58 118 49 C130 53 142 50 151 42"/>
-            <path class="leaf-line" d="M217 154 C230 144 237 134 240 123 C229 120 223 114 219 104 C232 98 238 89 238 80 C225 80 216 76 210 68 C220 60 223 52 221 44 C210 47 198 44 188 38"/>
-        </svg>
-
-        <svg class="leaf-art right" viewBox="0 0 320 320">
-            <path class="leaf-line" d="M164 285 C147 240 130 198 124 159 C116 111 131 69 169 38 C204 72 224 113 217 154 C211 193 187 239 164 285 Z"/>
-            <path class="leaf-line" d="M164 285 C165 240 164 194 166 147 C168 105 169 70 169 38"/>
-            <path class="leaf-line" d="M164 230 C139 215 121 198 105 178"/>
-            <path class="leaf-line" d="M165 208 C192 192 208 175 225 153"/>
-            <path class="leaf-line" d="M164 178 C141 162 124 146 111 129"/>
-            <path class="leaf-line" d="M166 155 C188 140 205 121 216 102"/>
-            <path class="leaf-line" d="M165 127 C144 112 132 98 124 85"/>
-            <path class="leaf-line" d="M167 105 C185 91 197 77 204 65"/>
-            <path class="leaf-line" d="M124 159 C111 151 102 141 97 130 C108 126 115 121 119 111 C107 105 101 96 101 87 C115 87 124 83 130 74 C119 67 116 58 118 49 C130 53 142 50 151 42"/>
-            <path class="leaf-line" d="M217 154 C230 144 237 134 240 123 C229 120 223 114 219 104 C232 98 238 89 238 80 C225 80 216 76 210 68 C220 60 223 52 221 44 C210 47 198 44 188 38"/>
-        </svg>
-    </div>
-    """),
-    unsafe_allow_html=True,
-)
-
-# ------------------------------------------------------------
-# IMAGE + MODEL
-# ------------------------------------------------------------
 def crop_roi(image, roi):
     w, h = image.size
     x1, y1, x2, y2 = roi
-    return image.crop((
-        int(x1 * w),
-        int(y1 * h),
-        int(x2 * w),
-        int(y2 * h),
-    ))
-
+    return image.crop((int(x1*w), int(y1*h), int(x2*w), int(y2*h)))
 
 def median_rgb(image):
     arr = np.asarray(image.convert("RGB"), dtype=np.uint8)
     rgb = np.median(arr.reshape(-1, 3), axis=0)
     return tuple(int(round(v)) for v in rgb)
 
-
 def make_features(rgb):
     r, g, b = rgb
-    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-    return np.array([[r, g, b, h * 360, s * 100, v * 100]], dtype=float)
-
+    h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
+    return np.array([[r, g, b, h*360, s*100, v*100]], dtype=float)
 
 @st.cache_resource
 def load_model():
@@ -614,219 +235,94 @@ def load_model():
     except Exception:
         return None
 
-
 def normalize_label(label):
     t = str(label).strip().lower()
-    mapping = {
-        "fresh": "fresh",
-        "còn tươi": "fresh",
-        "con tuoi": "fresh",
-        "0": "fresh",
-
-        "transition": "transition",
-        "chuyển tiếp": "transition",
-        "chuyen tiep": "transition",
-        "nên sử dụng sớm": "transition",
-        "nen su dung som": "transition",
-        "1": "transition",
-
-        "spoiled": "spoiled",
-        "hư hỏng": "spoiled",
-        "hu hong": "spoiled",
-        "có dấu hiệu hư hỏng": "spoiled",
-        "co dau hieu hu hong": "spoiled",
-        "2": "spoiled",
-    }
-    return mapping.get(t)
-
+    return {
+        "fresh":"fresh","còn tươi":"fresh","con tuoi":"fresh","0":"fresh",
+        "transition":"transition","chuyển tiếp":"transition","chuyen tiep":"transition",
+        "nên sử dụng sớm":"transition","nen su dung som":"transition","1":"transition",
+        "spoiled":"spoiled","hư hỏng":"spoiled","hu hong":"spoiled",
+        "có dấu hiệu hư hỏng":"spoiled","co dau hieu hu hong":"spoiled","2":"spoiled",
+    }.get(t)
 
 def demo_predict(rgb):
     arr = np.asarray(rgb, dtype=float)
-    return min(
-        DEMO_CENTROIDS,
-        key=lambda key: np.linalg.norm(arr - DEMO_CENTROIDS[key]),
-    )
-
+    return min(DEMO_CENTROIDS, key=lambda k: np.linalg.norm(arr - DEMO_CENTROIDS[k]))
 
 def analyze(image):
-    crop = crop_roi(image, INDICATOR_ROI)
-    rgb = median_rgb(crop)
-
+    rgb = median_rgb(crop_roi(image, INDICATOR_ROI))
     model = load_model()
-    if model is not None:
-        raw = model.predict(make_features(rgb))[0]
-        label = normalize_label(raw)
-        if label is None:
-            raise ValueError("Nhãn mô hình không hợp lệ.")
-        return label
-
-    return demo_predict(rgb)
-
+    if model is None:
+        return demo_predict(rgb)
+    label = normalize_label(model.predict(make_features(rgb))[0])
+    if label is None:
+        raise ValueError("Nhãn đầu ra của mô hình không hợp lệ.")
+    return label
 
 def apply_result_environment(label):
-    """
-    Đổi mood của toàn bộ background theo trạng thái.
-    Đây chỉ là thay đổi UI, không đổi logic phân loại.
-    """
     if label == "fresh":
-        bg = """
-        radial-gradient(circle at 50% 18%, rgba(38,184,111,.14), transparent 30%),
-        radial-gradient(circle at 12% 5%, rgba(112,75,170,.18), transparent 28%),
-        radial-gradient(circle at 90% 80%, rgba(29,127,85,.10), transparent 30%),
-        linear-gradient(145deg,#070c0a 0%,#0a1712 48%,#09090d 100%)
-        """
-        leaf = "#83d7ad"
-        opacity = ".065"
-
+        bg = "radial-gradient(circle at 50% 18%,rgba(28,183,105,.18),transparent 31%),radial-gradient(circle at 12% 5%,rgba(96,60,145,.15),transparent 27%),linear-gradient(145deg,#050b08 0%,#081510 48%,#07080b 100%)"
+        leaf, opacity = "#78cda1", ".058"
     elif label == "transition":
-        bg = """
-        radial-gradient(circle at 50% 18%, rgba(225,147,42,.16), transparent 30%),
-        radial-gradient(circle at 12% 5%, rgba(112,75,170,.17), transparent 28%),
-        radial-gradient(circle at 88% 84%, rgba(151,86,27,.11), transparent 30%),
-        linear-gradient(145deg,#0d0a06 0%,#1a1209 48%,#0d090d 100%)
-        """
-        leaf = "#e0b36c"
-        opacity = ".068"
-
+        bg = "radial-gradient(circle at 50% 18%,rgba(224,141,31,.21),transparent 31%),radial-gradient(circle at 12% 5%,rgba(102,61,143,.14),transparent 27%),linear-gradient(145deg,#0b0804 0%,#181006 48%,#0b0809 100%)"
+        leaf, opacity = "#d4a95b", ".061"
     else:
-        bg = """
-        radial-gradient(circle at 50% 20%, rgba(194,31,54,.22), transparent 30%),
-        radial-gradient(circle at 12% 4%, rgba(121,31,64,.22), transparent 28%),
-        radial-gradient(circle at 90% 82%, rgba(178,18,47,.15), transparent 32%),
-        linear-gradient(145deg,#0a0507 0%,#1c080e 47%,#090609 100%)
-        """
-        leaf = "#e15f74"
-        opacity = ".075"
-
-    st.markdown(
-        _html(f"""
-        <style>
-        .stApp{{
-            background:{bg};
-        }}
-        .leaf-line{{
-            stroke:{leaf};
-        }}
-        .leaf-art{{
-            opacity:{opacity};
-        }}
-        </style>
-        """),
-        unsafe_allow_html=True,
-    )
-
+        bg = "radial-gradient(circle at 50% 18%,rgba(210,22,53,.29),transparent 32%),radial-gradient(circle at 12% 5%,rgba(123,22,51,.25),transparent 29%),radial-gradient(circle at 88% 82%,rgba(180,18,46,.19),transparent 32%),linear-gradient(145deg,#080405 0%,#1c070d 48%,#080507 100%)"
+        leaf, opacity = "#d45368", ".072"
+    st.markdown(_html(f"<style>.stApp{{background:{bg};}}.perilla-bg{{color:{leaf};opacity:{opacity};}}</style>"), unsafe_allow_html=True)
 
 def show_result(label):
     r = RESULTS[label]
-    st.markdown(
-        _html(f"""
-        <div class="result-shell {r['class']}">
-            <div class="result-card">
-                <div class="status-mark">{r['symbol']}</div>
-                <div class="status-caption">Trạng thái</div>
-                <div class="status-title">{r['title']}</div>
-                <div class="status-message">{r['message']}</div>
-            </div>
-        </div>
-        """),
-        unsafe_allow_html=True,
-    )
-
-
-# ------------------------------------------------------------
-# HERO
-# ------------------------------------------------------------
-st.markdown(
-    _html("""
-    <div class="hero">
-        <div class="hero-orb"></div>
-
-        <div class="brand-row">
-            <div class="brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 64 64">
-                    <path d="M33 54 C27 44 21 34 20 24 C19 14 24 7 34 4 C44 10 49 18 47 28 C45 38 39 47 33 54 Z"
-                          fill="none" stroke="#F0D8FA" stroke-width="2.5"
-                          stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M33 54 C33 43 33 32 34 21 C34 14 34 8 34 4"
-                          fill="none" stroke="#F0D8FA" stroke-width="2.2"
-                          stroke-linecap="round"/>
-                    <path d="M33 41 C27 37 23 33 19 28 M34 35 C40 32 44 28 48 23 M34 27 C29 24 25 20 22 16 M34 21 C39 18 42 15 45 11"
-                          fill="none" stroke="#F0D8FA" stroke-width="1.8"
-                          stroke-linecap="round"/>
-                    <path d="M20 24 C16 21 14 18 14 15 C18 15 21 14 23 11 C20 9 19 7 20 5 C24 7 28 6 31 4
-                             M47 28 C51 25 53 22 53 19 C49 19 47 18 45 15 C48 13 49 10 48 8 C45 9 42 8 39 6"
-                          fill="none" stroke="#F0D8FA" stroke-width="1.7"
-                          stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </div>
-
-            <div>
-                <div class="brand-name">FreshTag</div>
-                <div class="brand-mini">Freshness indicator</div>
-            </div>
-        </div>
-
-        <div class="hero-copy">
-            <div class="hero-kicker">THẺ CHỈ THỊ TÍA TÔ</div>
-            <div class="hero-title">Chụp một lần.<br>Biết trạng thái ngay.</div>
-            <div class="hero-sub">
-                Kiểm tra nhanh trạng thái thực phẩm bằng màu của thẻ chỉ thị.
-            </div>
-        </div>
+    st.markdown(_html(f"""
+    <div class="result-shell {r['class']}">
+      <div class="result-card">
+        <div class="status-mark">{r['symbol']}</div>
+        <div class="status-caption">Trạng thái</div>
+        <div class="status-title">{r['title']}</div>
+        <div class="status-message">{r['message']}</div>
+      </div>
     </div>
+    """), unsafe_allow_html=True)
 
-    <div class="action-head">
-        <div class="action-title">Kiểm tra ngay</div>
-        <div class="action-sub">Chụp thẻ chỉ thị hoặc chọn ảnh có sẵn</div>
+st.markdown(_html(f"""
+<div class="hero">
+  <div class="brand-row">
+    <div class="brand-mark">{PERILLA_LOGO_SVG}</div>
+    <div>
+      <div class="brand-name">FreshTag</div>
+      <div class="brand-mini">Freshness indicator</div>
     </div>
-    """),
-    unsafe_allow_html=True,
-)
+  </div>
+  <div class="hero-copy">
+    <div class="hero-kicker">THẺ CHỈ THỊ TÍA TÔ</div>
+    <div class="hero-title">Chụp một lần.<br>Biết trạng thái ngay.</div>
+    <div class="hero-sub">Kiểm tra nhanh trạng thái thực phẩm bằng màu của thẻ chỉ thị.</div>
+  </div>
+</div>
+<div class="action-head">
+  <div class="action-title">Kiểm tra ngay</div>
+  <div class="action-sub">Chụp thẻ chỉ thị hoặc chọn ảnh có sẵn</div>
+</div>
+"""), unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# INPUT
-# ------------------------------------------------------------
-mode = st.radio(
-    "Nguồn ảnh",
-    ["📷 Chụp ảnh", "▣ Thư viện"],
-    horizontal=True,
-    label_visibility="collapsed",
-)
-
-image_file = None
+mode = st.radio("Nguồn ảnh", ["📷 Chụp ảnh", "▣ Thư viện"], horizontal=True, label_visibility="collapsed")
 
 if mode == "📷 Chụp ảnh":
-    image_file = st.camera_input(
-        "Chụp ảnh",
-        label_visibility="collapsed",
-    )
+    image_file = st.camera_input("Chụp ảnh", label_visibility="collapsed")
 else:
-    image_file = st.file_uploader(
-        "Chọn ảnh",
-        type=["jpg", "jpeg", "png"],
-        label_visibility="collapsed",
-    )
+    image_file = st.file_uploader("Chọn ảnh", type=["jpg","jpeg","png"], label_visibility="collapsed")
 
-# ------------------------------------------------------------
-# AUTO RESULT
-# ------------------------------------------------------------
 if image_file is not None:
     try:
         image = Image.open(image_file).convert("RGB")
         label = analyze(image)
-
-        # Thay background theo trạng thái rồi hiển thị kết quả.
         apply_result_environment(label)
         show_result(label)
-
     except Exception:
         st.error("Không thể đọc ảnh. Vui lòng chụp lại hoặc chọn ảnh khác.")
 
-st.markdown(
-    _html("""
-    <div class="note">
-        Kết quả mang tính hỗ trợ nhận định và không thay thế kiểm nghiệm an toàn thực phẩm.
-    </div>
-    """),
-    unsafe_allow_html=True,
-)
+st.markdown(_html("""
+<div class="note">
+Kết quả mang tính hỗ trợ nhận định và không thay thế kiểm nghiệm an toàn thực phẩm.
+</div>
+"""), unsafe_allow_html=True)
